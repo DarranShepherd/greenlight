@@ -10,6 +10,7 @@
 
 #include "app_settings.h"
 #include "lcd.h"
+#include "splash_logo.h"
 #include "sync_controller.h"
 #include "time_manager.h"
 #include "touch.h"
@@ -21,6 +22,10 @@
 typedef struct {
     lv_obj_t *tileview;
     lv_obj_t *tiles[APP_SCREEN_COUNT];
+    lv_obj_t *startup_overlay;
+    lv_obj_t *startup_logo_image;
+    lv_obj_t *startup_title_label;
+    lv_obj_t *startup_status_label;
     lv_obj_t *settings_content;
     lv_obj_t *primary_top_bar;
     lv_obj_t *primary_clock_label;
@@ -1099,6 +1104,10 @@ static void touch_calibration_overlay_event_cb(lv_event_t *event)
 
 static void sync_tile_locked(const app_state_t *state)
 {
+    if (state->startup_stage != APP_STARTUP_STAGE_COMPLETE) {
+        return;
+    }
+
     if (state->active_screen >= APP_SCREEN_COUNT) {
         return;
     }
@@ -1257,6 +1266,26 @@ static void update_primary_tile_locked(const app_state_t *state)
 static void apply_state_locked(const app_state_t *state)
 {
     char clock_text[12] = {0};
+
+    if (s_view.startup_overlay != NULL) {
+        if (state->startup_stage == APP_STARTUP_STAGE_COMPLETE) {
+            lv_obj_add_flag(s_view.startup_overlay, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_clear_flag(s_view.startup_overlay, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(s_view.startup_overlay);
+        }
+    }
+
+    if (s_view.startup_title_label != NULL) {
+        lv_label_set_text(s_view.startup_title_label, "Greenlight");
+    }
+
+    if (s_view.startup_status_label != NULL) {
+        lv_label_set_text(
+            s_view.startup_status_label,
+            state->startup_status_text[0] != '\0' ? state->startup_status_text : app_state_get_startup_stage_name(state->startup_stage)
+        );
+    }
 
     sync_tile_locked(state);
 
@@ -2001,6 +2030,41 @@ esp_err_t ui_router_init(app_state_t *state)
     lv_obj_set_style_border_width(s_view.touch_calibration_target, 3, 0);
     lv_obj_set_style_border_color(s_view.touch_calibration_target, lv_color_white(), 0);
     lv_obj_remove_flag(s_view.touch_calibration_target, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+
+    s_view.startup_overlay = lv_obj_create(screen);
+    lv_obj_set_size(s_view.startup_overlay, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_bg_color(s_view.startup_overlay, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(s_view.startup_overlay, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_view.startup_overlay, 0, 0);
+    lv_obj_set_style_pad_all(s_view.startup_overlay, 24, 0);
+    lv_obj_set_style_pad_row(s_view.startup_overlay, 10, 0);
+    lv_obj_set_flex_flow(s_view.startup_overlay, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(s_view.startup_overlay, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_layout(s_view.startup_overlay, LV_LAYOUT_FLEX);
+    lv_obj_clear_flag(s_view.startup_overlay, LV_OBJ_FLAG_SCROLLABLE);
+
+    s_view.startup_logo_image = lv_image_create(s_view.startup_overlay);
+    lv_image_set_src(s_view.startup_logo_image, &splash_logo);
+
+    s_view.startup_title_label = lv_label_create(s_view.startup_overlay);
+    lv_obj_set_style_text_color(s_view.startup_title_label, lv_color_white(), 0);
+    lv_obj_set_style_text_font(s_view.startup_title_label, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_align(s_view.startup_title_label, LV_TEXT_ALIGN_CENTER, 0);
+
+    lv_obj_t *startup_rule = lv_obj_create(s_view.startup_overlay);
+    lv_obj_set_size(startup_rule, 90, 4);
+    lv_obj_set_style_radius(startup_rule, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(startup_rule, lv_color_hex(0x1d4ed8), 0);
+    lv_obj_set_style_bg_opa(startup_rule, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(startup_rule, 0, 0);
+    lv_obj_remove_flag(startup_rule, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+
+    s_view.startup_status_label = lv_label_create(s_view.startup_overlay);
+    lv_obj_set_width(s_view.startup_status_label, lv_pct(100));
+    lv_obj_set_height(s_view.startup_status_label, 40);
+    lv_obj_set_style_text_color(s_view.startup_status_label, lv_color_hex(0xcbd5e1), 0);
+    lv_obj_set_style_text_align(s_view.startup_status_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(s_view.startup_status_label, LV_LABEL_LONG_WRAP);
 
     lv_tileview_set_tile_by_index(s_view.tileview, 0, 0, LV_ANIM_OFF);
     apply_state_locked(state);

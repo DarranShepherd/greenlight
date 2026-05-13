@@ -21,6 +21,7 @@ void app_state_init(app_state_t *state, const app_settings_t *settings)
     memset(state, 0, sizeof(*state));
     state->settings = *settings;
     state->active_screen = APP_SCREEN_PRIMARY;
+    app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, "Starting hardware");
     state->wifi_has_saved_credentials = settings->wifi_ssid[0] != '\0';
     app_state_set_wifi_status(state, APP_WIFI_STATUS_IDLE, state->wifi_has_saved_credentials ? "Saved Wi-Fi ready" : "Enter Wi-Fi credentials to get started");
     app_state_set_time_status(state, APP_TIME_STATUS_IDLE, false, "Waiting for Wi-Fi before time sync");
@@ -41,6 +42,12 @@ void app_state_set_active_screen(app_state_t *state, app_screen_t screen)
     if (screen < APP_SCREEN_COUNT) {
         state->active_screen = screen;
     }
+}
+
+void app_state_set_startup_stage(app_state_t *state, app_startup_stage_t stage, const char *status_text)
+{
+    state->startup_stage = stage;
+    copy_text(state->startup_status_text, sizeof(state->startup_status_text), status_text);
 }
 
 void app_state_set_brightness(app_state_t *state, uint8_t brightness_percent)
@@ -196,6 +203,20 @@ const char *app_state_get_screen_name(app_screen_t screen)
         case APP_SCREEN_SETTINGS:
             return "Settings";
         case APP_SCREEN_COUNT:
+        default:
+            return "Unknown";
+    }
+}
+
+const char *app_state_get_startup_stage_name(app_startup_stage_t stage)
+{
+    switch (stage) {
+        case APP_STARTUP_STAGE_BOOTING:
+            return "Booting";
+        case APP_STARTUP_STAGE_ONBOARDING:
+            return "Onboarding";
+        case APP_STARTUP_STAGE_COMPLETE:
+            return "Complete";
         default:
             return "Unknown";
     }

@@ -5,6 +5,7 @@ idf_component_register(
         "lcd.c"
         "main.c"
         "octopus_client.c"
+        "splash_logo.c"
         "sync_controller.c"
         "tariff_model.c"
         "time_manager.c"

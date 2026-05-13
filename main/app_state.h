@@ -53,6 +53,12 @@ typedef enum {
     APP_SCREEN_COUNT,
 } app_screen_t;
 
+typedef enum {
+    APP_STARTUP_STAGE_BOOTING = 0,
+    APP_STARTUP_STAGE_ONBOARDING,
+    APP_STARTUP_STAGE_COMPLETE,
+} app_startup_stage_t;
+
 typedef struct {
     bool valid;
     time_t start_local;
@@ -79,6 +85,7 @@ typedef struct {
 typedef struct {
     app_settings_t settings;
     app_screen_t active_screen;
+    app_startup_stage_t startup_stage;
     uint32_t uptime_seconds;
     app_wifi_status_t wifi_status;
     bool wifi_has_saved_credentials;
@@ -106,12 +113,14 @@ typedef struct {
     char tariff_next_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN];
     char tariff_detail_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN];
     char tariff_updated_text[APP_TARIFF_UPDATED_TEXT_MAX_LEN];
+    char startup_status_text[APP_TARIFF_STATUS_TEXT_MAX_LEN];
     app_tariff_day_view_t tariff_today;
     app_tariff_day_view_t tariff_tomorrow;
 } app_state_t;
 
 void app_state_init(app_state_t *state, const app_settings_t *settings);
 void app_state_set_active_screen(app_state_t *state, app_screen_t screen);
+void app_state_set_startup_stage(app_state_t *state, app_startup_stage_t stage, const char *status_text);
 void app_state_set_brightness(app_state_t *state, uint8_t brightness_percent);
 void app_state_set_uptime(app_state_t *state, uint32_t uptime_seconds);
 void app_state_set_wifi_saved_credentials(app_state_t *state, bool has_saved_credentials);
@@ -150,6 +159,7 @@ void app_state_set_tariff_detail(
     const app_tariff_day_view_t *tomorrow
 );
 const char *app_state_get_screen_name(app_screen_t screen);
+const char *app_state_get_startup_stage_name(app_startup_stage_t stage);
 const char *app_state_get_wifi_status_name(app_wifi_status_t status);
 const char *app_state_get_time_status_name(app_time_status_t status);
 const char *app_state_get_tariff_status_name(app_tariff_status_t status);

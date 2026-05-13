@@ -6,9 +6,9 @@ The device is intended to answer one question instantly: is now a good time to u
 
 ## Current status
 
-Phase 6 of the delivery plan is complete in firmware and has been hardware-tested on the target CYD board.
+Phase 7 of the delivery plan is complete in firmware and has been hardware-tested on the target CYD board.
 
-Implemented through phase 6:
+Implemented through phase 7:
 
 - the demo UI has been replaced with a three-screen horizontal router
 - startup now initializes NVS and loads persisted app settings
@@ -37,12 +37,15 @@ Implemented through phase 6:
 - the tariff region control is now first-class on-device, shows code plus region name, persists immediately, and triggers a fresh Agile reload for the selected region
 - touch calibration now lives in its own dedicated settings card separate from the Wi-Fi onboarding controls
 - the heavier phase 5 LVGL scene required increasing `CONFIG_ESP_MAIN_TASK_STACK_SIZE` and `CONFIG_MAIN_TASK_STACK_SIZE` to `8192`
+- boot now holds on a branded splash screen until startup is resolved instead of dropping straight into the routed UI
+- the Ampernomics logo is now rendered on-device during boot from the repository SVG via a generated LVGL image asset
+- startup status text now reports Wi-Fi reconnect, London time sync, and tariff download progress before route handoff
+- the splash layout now reserves a fixed two-line status area so long SSIDs or wrapped startup messages do not shift the logo vertically
 
 Remaining work before the routed shell is functionally complete for v1:
 
 - the primary route exposes the intended glanceable layout for current and upcoming grouped periods
 - the detail route exposes the intended histogram view for today and tomorrow, including single-day fallback before tomorrow is published
-- boot should show a branded splash screen with live startup status before entering the routed UI
 
 ## Product intent
 
@@ -338,10 +341,11 @@ Likely ESP-IDF facilities:
 
 ### Phase 7: boot splash and startup flow
 
-- show the Ampernomics logo from `logo.svg` centered during boot
-- display live startup status text below the logo for steps such as Wi-Fi connect, time sync, and tariff download
-- transition to the primary UI route when startup completes successfully
-- fall back to the settings route if Wi-Fi connection fails or onboarding is required
+- complete: show the Ampernomics logo from `logo.svg` centered during boot
+- complete: display live startup status text below the logo for steps such as Wi-Fi connect, time sync, and tariff download
+- complete: reserve two lines for startup status text so wrapped messages do not move the splash lockup
+- complete: transition to the primary UI route when startup completes successfully
+- complete: fall back to the settings route if Wi-Fi connection fails or onboarding is required
 
 ## Implementation notes and learnings
 

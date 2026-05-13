@@ -35,11 +35,12 @@ Implemented through phase 5:
 - when tomorrow prices are only partially published by Octopus, the chart now preserves the full `0-24` axis and leaves the unpublished trailing hours empty rather than stretching the returned bars to fill the width
 - the heavier phase 5 LVGL scene required increasing `CONFIG_ESP_MAIN_TASK_STACK_SIZE` and `CONFIG_MAIN_TASK_STACK_SIZE` to `8192`
 
-The current routed shell is now functionally complete for v1, with a few polish items still possible:
+Remaining work before the routed shell is functionally complete for v1:
 
 - the primary route exposes the intended glanceable layout for current and upcoming grouped periods
 - the detail route exposes the intended histogram view for today and tomorrow, including single-day fallback before tomorrow is published
-- the settings screen covers Wi-Fi onboarding, brightness, sync status, and touch calibration, but the tariff region picker is still basic
+- the settings route still needs its final visual pass, simplified layout, and a first-class tariff region control
+- boot should show a branded splash screen with live startup status before entering the routed UI
 
 ## Product intent
 
@@ -133,12 +134,20 @@ Behavior:
 
 This screen contains:
 
+- brightness control
+- tariff region selector showing code and region name
 - Wi-Fi SSID selection from scan results
 - PSK entry using an on-screen keyboard
 - connection status and retry feedback
-- tariff region dropdown showing code and region name
-- brightness control
-- refresh or sync status details if space allows
+- time sync status details
+
+Target layout for the final settings pass:
+
+- black background with the same top bar treatment as the other routes
+- current time at top left, centered title, and Wi-Fi status icon at top right
+- the Wi-Fi icon should show a strike-through treatment when disconnected
+- remove explanatory filler copy and keep only the controls and concise state text
+- order the sections as brightness, region, Wi-Fi, then time sync information
 
 ## Data source
 
@@ -162,12 +171,14 @@ The code should be structured so that product code selection can later move behi
 
 1. Initialize display, touch, LVGL, and non-volatile storage.
 2. Load persisted settings from NVS.
-3. If Wi-Fi credentials are available, attempt automatic reconnect.
-4. If Wi-Fi is not configured or connection fails, show the settings screen and prompt for onboarding.
-5. After Wi-Fi connection, synchronize time with NTP.
-6. Do not enter the main tariff UI until local time is valid.
-7. Fetch tariff data during startup before entering the main tariff UI.
-8. If startup tariff fetch fails, show an offline screen rather than stale tariff data.
+3. Show a splash screen on boot with the Ampernomics logo centered and a status line underneath describing startup progress.
+4. If Wi-Fi credentials are available, attempt automatic reconnect while the splash screen reports state changes such as connecting to Wi-Fi, synchronizing time, and downloading prices.
+5. If Wi-Fi is not configured or connection fails, switch to the settings screen and prompt for onboarding.
+6. After Wi-Fi connection, synchronize time with NTP.
+7. Do not enter the main tariff UI until local time is valid.
+8. Fetch tariff data during startup before entering the main tariff UI.
+9. When startup completes successfully, enter the primary UI route.
+10. If startup tariff fetch fails, show an offline screen rather than stale tariff data.
 
 ### Tariff refresh behavior
 
@@ -301,12 +312,26 @@ Likely ESP-IDF facilities:
 - complete: show remaining time in current band and next three blocks
 - complete: add prominent treatment for `Super Cheap` and `Very Expensive`
 
-### Phase 5: detail and settings screens
+### Phase 5: detail screen
 
-- build the histogram screen for today and tomorrow
-- add min, avg, and max summaries
-- complete the settings screen with region dropdown and brightness control
-- wire horizontal swipe navigation across all three screens
+- complete: build the histogram screen for today and tomorrow
+- complete: add min, avg, and max summaries
+- complete: wire horizontal swipe navigation across all three screens
+
+### Phase 6: settings UI refresh
+
+- restyle the settings screen to match the black-background routed UI
+- use a compact top bar with time at left, title centered, and Wi-Fi status at right
+- show the Wi-Fi icon with a strike-through treatment when disconnected
+- remove extraneous explanatory text and keep the screen focused on controls and concise status
+- reorder settings content as brightness, region, Wi-Fi, then time sync information
+
+### Phase 7: boot splash and startup flow
+
+- show the Ampernomics logo from `logo.svg` centered during boot
+- display live startup status text below the logo for steps such as Wi-Fi connect, time sync, and tariff download
+- transition to the primary UI route when startup completes successfully
+- fall back to the settings route if Wi-Fi connection fails or onboarding is required
 
 ## Implementation notes and learnings
 
@@ -319,7 +344,7 @@ Likely ESP-IDF facilities:
 - If a screen must be scrollable, its parent container height still needs to fully account for any absolutely positioned children or the lower content can become unreachable.
 - Public Octopus Agile product codes do roll forward over time, so the firmware now discovers the current active import product instead of treating a historical product code as stable.
 
-### Phase 6: polish
+### Phase 8: polish
 
 - animate only where it improves legibility
 - tune refresh timing, retry behavior, and offline or live-refresh indicators

@@ -6,9 +6,9 @@ The device is intended to answer one question instantly: is now a good time to u
 
 ## Current status
 
-Phase 5 of the delivery plan is complete in firmware and has been hardware-tested on the target CYD board.
+Phase 6 of the delivery plan is complete in firmware and has been hardware-tested on the target CYD board.
 
-Implemented through phase 5:
+Implemented through phase 6:
 
 - the demo UI has been replaced with a three-screen horizontal router
 - startup now initializes NVS and loads persisted app settings
@@ -33,13 +33,15 @@ Implemented through phase 5:
 - the detail screen now matches the primary route styling with a black background, compact top bar, and tariff-band colors reused in the histogram bars and summary values
 - the today histogram now includes a vertical current-time marker
 - when tomorrow prices are only partially published by Octopus, the chart now preserves the full `0-24` axis and leaves the unpublished trailing hours empty rather than stretching the returned bars to fill the width
+- the settings screen now matches the routed UI styling with a black background, compact top bar, and disconnected Wi-Fi strike-through treatment
+- the tariff region control is now first-class on-device, shows code plus region name, persists immediately, and triggers a fresh Agile reload for the selected region
+- touch calibration now lives in its own dedicated settings card separate from the Wi-Fi onboarding controls
 - the heavier phase 5 LVGL scene required increasing `CONFIG_ESP_MAIN_TASK_STACK_SIZE` and `CONFIG_MAIN_TASK_STACK_SIZE` to `8192`
 
 Remaining work before the routed shell is functionally complete for v1:
 
 - the primary route exposes the intended glanceable layout for current and upcoming grouped periods
 - the detail route exposes the intended histogram view for today and tomorrow, including single-day fallback before tomorrow is published
-- the settings route still needs its final visual pass, simplified layout, and a first-class tariff region control
 - boot should show a branded splash screen with live startup status before entering the routed UI
 
 ## Product intent
@@ -148,6 +150,13 @@ Target layout for the final settings pass:
 - the Wi-Fi icon should show a strike-through treatment when disconnected
 - remove explanatory filler copy and keep only the controls and concise state text
 - order the sections as brightness, region, Wi-Fi, then time sync information
+
+Current firmware treatment:
+
+- a compact top bar with clock, centered title, and Wi-Fi status icon matching the other routes
+- brightness, region, Wi-Fi, touch calibration, and time sync each live in compact dark cards
+- the region control cycles through Octopus region codes and names and triggers an immediate tariff refresh for the newly selected region
+- touch calibration status and action are separated from Wi-Fi onboarding so calibration can be revisited without scrolling through network controls
 
 ## Data source
 
@@ -320,11 +329,12 @@ Likely ESP-IDF facilities:
 
 ### Phase 6: settings UI refresh
 
-- restyle the settings screen to match the black-background routed UI
-- use a compact top bar with time at left, title centered, and Wi-Fi status at right
-- show the Wi-Fi icon with a strike-through treatment when disconnected
-- remove extraneous explanatory text and keep the screen focused on controls and concise status
-- reorder settings content as brightness, region, Wi-Fi, then time sync information
+- complete: restyle the settings screen to match the black-background routed UI
+- complete: use a compact top bar with time at left, title centered, and Wi-Fi status at right
+- complete: show the Wi-Fi icon with a strike-through treatment when disconnected
+- complete: remove extraneous explanatory text and keep the screen focused on controls and concise status
+- complete: reorder settings content as brightness, region, Wi-Fi, then time sync information
+- complete: split touch calibration into its own card while keeping it inside the settings route
 
 ### Phase 7: boot splash and startup flow
 

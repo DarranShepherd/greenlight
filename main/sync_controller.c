@@ -475,3 +475,30 @@ esp_err_t sync_controller_init(app_state_t *state)
 
     return ESP_OK;
 }
+
+void sync_controller_request_refresh(void)
+{
+    s_last_attempt_time = 0;
+    s_last_success_time = 0;
+    s_loaded_today_key = 0;
+    s_has_successful_load = false;
+    s_tariff_status = APP_TARIFF_STATUS_IDLE;
+    memset(&s_runtime_state, 0, sizeof(s_runtime_state));
+    memset(&s_next_runtime_state, 0, sizeof(s_next_runtime_state));
+
+    if (s_state == NULL) {
+        return;
+    }
+
+    if (!wifi_manager_is_connected()) {
+        publish_waiting_status("Region changed. Waiting for Wi-Fi before tariff fetch");
+        return;
+    }
+
+    if (!s_state->time_valid) {
+        publish_waiting_status("Region changed. Waiting for valid local time before tariff fetch");
+        return;
+    }
+
+    publish_waiting_status("Region changed. Refreshing Octopus Agile prices");
+}

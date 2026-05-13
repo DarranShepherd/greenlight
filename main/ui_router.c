@@ -21,6 +21,13 @@ typedef struct {
     lv_obj_t *settings_content;
     lv_obj_t *route_label;
     lv_obj_t *uptime_label;
+    lv_obj_t *primary_status_label;
+    lv_obj_t *primary_current_label;
+    lv_obj_t *primary_next_label;
+    lv_obj_t *primary_updated_label;
+    lv_obj_t *detail_status_label;
+    lv_obj_t *detail_summary_label;
+    lv_obj_t *detail_updated_label;
     lv_obj_t *brightness_label;
     lv_obj_t *brightness_bar;
     lv_obj_t *region_label;
@@ -540,6 +547,39 @@ static void apply_state_locked(const app_state_t *state)
         lv_label_set_text_fmt(s_view.uptime_label, "Uptime %lus", (unsigned long)state->uptime_seconds);
     }
 
+    if (s_view.primary_status_label != NULL) {
+        lv_label_set_text_fmt(
+            s_view.primary_status_label,
+            "Tariff %s: %s",
+            app_state_get_tariff_status_name(state->tariff_status),
+            state->tariff_status_text
+        );
+    }
+
+    if (s_view.primary_current_label != NULL) {
+        lv_label_set_text(s_view.primary_current_label, state->tariff_current_text);
+    }
+
+    if (s_view.primary_next_label != NULL) {
+        lv_label_set_text(s_view.primary_next_label, state->tariff_next_text);
+    }
+
+    if (s_view.primary_updated_label != NULL) {
+        lv_label_set_text(s_view.primary_updated_label, state->tariff_updated_text);
+    }
+
+    if (s_view.detail_status_label != NULL) {
+        lv_label_set_text(s_view.detail_status_label, state->tariff_status_text);
+    }
+
+    if (s_view.detail_summary_label != NULL) {
+        lv_label_set_text(s_view.detail_summary_label, state->tariff_detail_text);
+    }
+
+    if (s_view.detail_updated_label != NULL) {
+        lv_label_set_text(s_view.detail_updated_label, state->tariff_updated_text);
+    }
+
     if (s_view.brightness_label != NULL) {
         lv_label_set_text_fmt(s_view.brightness_label, "%u%%", (unsigned int)state->settings.brightness_percent);
     }
@@ -599,18 +639,32 @@ static void create_primary_tile(lv_obj_t *tile)
 
     add_tile_header(
         tile,
-        "Greenlight / Foundation",
-        "Primary screen shell",
-        "This replaces the bring-up demo. The live tariff card lands on this route in phase 4.",
+        "Greenlight / Agile",
+        "Primary route",
+        "Phase 3 now fetches, classifies, and groups Octopus Agile prices in RAM so this route can show live current and upcoming blocks.",
         lv_color_white()
     );
 
     lv_obj_t *card = create_section_card(tile, lv_color_hex(0x14532d));
-    lv_obj_t *status = lv_label_create(card);
-    lv_label_set_text(status, "Phase 2 now brings up Wi-Fi onboarding and London time sync. The tariff card still lands here in phase 4.");
-    lv_obj_set_style_text_color(status, lv_color_white(), 0);
-    lv_obj_set_width(status, lv_pct(100));
-    lv_label_set_long_mode(status, LV_LABEL_LONG_WRAP);
+    s_view.primary_status_label = lv_label_create(card);
+    lv_obj_set_style_text_color(s_view.primary_status_label, lv_color_white(), 0);
+    lv_obj_set_width(s_view.primary_status_label, lv_pct(100));
+    lv_label_set_long_mode(s_view.primary_status_label, LV_LABEL_LONG_WRAP);
+
+    s_view.primary_current_label = lv_label_create(card);
+    lv_obj_set_style_text_color(s_view.primary_current_label, lv_color_hex(0xd1fae5), 0);
+    lv_obj_set_width(s_view.primary_current_label, lv_pct(100));
+    lv_label_set_long_mode(s_view.primary_current_label, LV_LABEL_LONG_WRAP);
+
+    s_view.primary_next_label = lv_label_create(card);
+    lv_obj_set_style_text_color(s_view.primary_next_label, lv_color_hex(0xa7f3d0), 0);
+    lv_obj_set_width(s_view.primary_next_label, lv_pct(100));
+    lv_label_set_long_mode(s_view.primary_next_label, LV_LABEL_LONG_WRAP);
+
+    s_view.primary_updated_label = lv_label_create(card);
+    lv_obj_set_style_text_color(s_view.primary_updated_label, lv_color_hex(0x6ee7b7), 0);
+    lv_obj_set_width(s_view.primary_updated_label, lv_pct(100));
+    lv_label_set_long_mode(s_view.primary_updated_label, LV_LABEL_LONG_WRAP);
 
     s_view.route_label = lv_label_create(card);
     lv_obj_set_style_text_color(s_view.route_label, lv_color_hex(0xd1fae5), 0);
@@ -631,17 +685,26 @@ static void create_detail_tile(lv_obj_t *tile)
     add_tile_header(
         tile,
         "Greenlight / Detail",
-        "Detail screen shell",
-        "The histogram and daily summaries will attach here once the Octopus tariff pipeline exists.",
+        "Detail route",
+        "Phase 3 exposes the classified tariff dataset and daily summary stats here ahead of the histogram UI in phase 5.",
         lv_color_white()
     );
 
     lv_obj_t *card = create_section_card(tile, lv_color_hex(0x374151));
-    lv_obj_t *status = lv_label_create(card);
-    lv_label_set_text(status, "The detail route stays live while Wi-Fi and time come online, so tariff charts can plug in without reworking navigation.");
-    lv_obj_set_style_text_color(status, lv_color_hex(0xe5e7eb), 0);
-    lv_obj_set_width(status, lv_pct(100));
-    lv_label_set_long_mode(status, LV_LABEL_LONG_WRAP);
+    s_view.detail_status_label = lv_label_create(card);
+    lv_obj_set_style_text_color(s_view.detail_status_label, lv_color_hex(0xf9fafb), 0);
+    lv_obj_set_width(s_view.detail_status_label, lv_pct(100));
+    lv_label_set_long_mode(s_view.detail_status_label, LV_LABEL_LONG_WRAP);
+
+    s_view.detail_summary_label = lv_label_create(card);
+    lv_obj_set_style_text_color(s_view.detail_summary_label, lv_color_hex(0xe5e7eb), 0);
+    lv_obj_set_width(s_view.detail_summary_label, lv_pct(100));
+    lv_label_set_long_mode(s_view.detail_summary_label, LV_LABEL_LONG_WRAP);
+
+    s_view.detail_updated_label = lv_label_create(card);
+    lv_obj_set_style_text_color(s_view.detail_updated_label, lv_color_hex(0x9ca3af), 0);
+    lv_obj_set_width(s_view.detail_updated_label, lv_pct(100));
+    lv_label_set_long_mode(s_view.detail_updated_label, LV_LABEL_LONG_WRAP);
 }
 
 static void create_settings_tile(lv_obj_t *tile)

@@ -4,6 +4,9 @@ idf_component_register(
         "app_state.c"
         "lcd.c"
         "main.c"
+        "octopus_client.c"
+        "sync_controller.c"
+        "tariff_model.c"
         "time_manager.c"
         "touch.c"
         "ui_router.c"
@@ -16,8 +19,10 @@ idf_component_register(
         esp_driver_gpio
         esp_driver_ledc
         esp_driver_spi
+        esp_http_client
         esp_wifi
         freertos
         lwip
+        mbedtls
         nvs_flash
 )

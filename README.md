@@ -6,9 +6,9 @@ The device is intended to answer one question instantly: is now a good time to u
 
 ## Current status
 
-Phase 2 of the delivery plan is complete in firmware and has been hardware-tested on the target CYD board.
+Phase 3 of the delivery plan is complete in firmware and has been hardware-tested on the target CYD board.
 
-Implemented in phase 2:
+Implemented through phase 3:
 
 - the demo UI has been replaced with a three-screen horizontal router
 - startup now initializes NVS and loads persisted app settings
@@ -20,10 +20,16 @@ Implemented in phase 2:
 - SNTP time sync now runs after Wi-Fi connection and presents London local time on-device
 - touch calibration now runs on-device, stores an affine calibration in NVS, and is applied on boot
 - Wi-Fi join failures now report the underlying disconnect reason instead of collapsing everything into a generic timeout
+- startup now fetches Octopus Agile tariff data after time sync and keeps the active dataset in RAM only
+- tariff prices are classified into `Super Cheap`, `Cheap`, `Normal`, `Expensive`, and `Very Expensive` bands
+- adjacent slots in the same band are grouped into contiguous display blocks for the current and upcoming periods
+- startup tariff failures now surface an offline state instead of pretending stale data is valid
+- later refresh failures keep the last in-memory dataset and mark live refresh as unavailable
+- the firmware now discovers the currently active public Agile product code instead of depending on an expired hardcoded tariff identifier
 
 The current routed shell is still a foundation build:
 
-- primary and detail screens are placeholders for later phases
+- primary and detail routes now expose live tariff status, grouped-period summaries, and offline or stale-refresh messaging, but the final polished phase 4 or 5 layouts are still pending
 - the settings screen now covers Wi-Fi onboarding, brightness, sync status, and touch calibration, but the tariff region picker is still basic
 
 ## Product intent
@@ -122,7 +128,7 @@ This screen contains:
 
 Greenlight will consume the public Octopus Energy API.
 
-For v1, the tariff is determined by the selected region rather than account lookup. The implementation should use the Agile tariff endpoint that returns half-hourly unit rates for the selected product and region, using the VAT-inclusive field for all user-facing calculations.
+For v1, the tariff is determined by the selected region rather than account lookup. The implementation uses the Agile tariff endpoint that returns half-hourly unit rates for the active public import product and selected region, using the VAT-inclusive field for all user-facing calculations.
 
 Initial target assumptions:
 
@@ -130,7 +136,7 @@ Initial target assumptions:
 - region: `B`
 - timezone handling: local display in `Europe/London`
 
-The code should be structured so that product code selection can later be moved behind a configuration layer or account-derived tariff lookup.
+The code should be structured so that product code selection can later move behind a configuration layer or account-derived tariff lookup, even though the current firmware already discovers the active public Agile product at runtime.
 
 ## Functional requirements
 
@@ -246,7 +252,7 @@ Likely ESP-IDF facilities:
 - `esp_tls`
 - `esp_sntp`
 - `nvs_flash`
-- `cJSON` or another small JSON parser already suitable for ESP-IDF
+- a small JSON parser suitable for ESP-IDF
 
 ## Delivery plan
 
@@ -266,10 +272,10 @@ Likely ESP-IDF facilities:
 
 ### Phase 3: Octopus data pipeline
 
-- fetch and parse Agile tariff data for the selected region
-- keep the active tariff dataset in RAM only
-- classify prices into bands and group them into contiguous display blocks
-- add startup offline handling and live refresh failure handling
+- complete: fetch and parse Agile tariff data for the selected region
+- complete: keep the active tariff dataset in RAM only
+- complete: classify prices into bands and group them into contiguous display blocks
+- complete: add startup offline handling and live refresh failure handling
 
 ### Phase 4: primary screen
 
@@ -293,6 +299,7 @@ Likely ESP-IDF facilities:
 - On this hardware, nested flex layouts plus scrollable content inside the settings tile were less predictable than expected once rotation was applied.
 - For phase 1, the settings controls render more reliably as a compact, explicit layout rather than depending on deeper nested auto-layout and long copy.
 - If a screen must be scrollable, its parent container height still needs to fully account for any absolutely positioned children or the lower content can become unreachable.
+- Public Octopus Agile product codes do roll forward over time, so the firmware now discovers the current active import product instead of treating a historical product code as stable.
 
 ### Phase 6: polish
 

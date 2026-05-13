@@ -11,6 +11,7 @@
 #include "app_settings.h"
 #include "app_state.h"
 #include "lcd.h"
+#include "sync_controller.h"
 #include "time_manager.h"
 #include "touch.h"
 #include "ui_router.h"
@@ -29,6 +30,7 @@ void app_main(void)
     app_settings_t settings;
     app_state_t app_state;
     bool was_wifi_connected = false;
+    bool tariff_entry_released = false;
 
     ESP_LOGI(TAG, "Starting Greenlight on CYD");
 
@@ -59,6 +61,7 @@ void app_main(void)
     ESP_ERROR_CHECK(wifi_manager_init(&app_state));
     ESP_ERROR_CHECK(wifi_manager_start());
     ESP_ERROR_CHECK(time_manager_init(&app_state));
+    ESP_ERROR_CHECK(sync_controller_init(&app_state));
 
     if (app_state.wifi_has_saved_credentials) {
         ESP_LOGI(TAG, "Attempting Wi-Fi reconnect for SSID %s", app_state.settings.wifi_ssid);
@@ -79,6 +82,16 @@ void app_main(void)
 
         was_wifi_connected = wifi_connected;
         time_manager_update_clock(&app_state);
+
+        if (!tariff_entry_released) {
+            if (!app_state.time_valid || (wifi_connected && app_state.tariff_status != APP_TARIFF_STATUS_OFFLINE && !app_state.tariff_has_data)) {
+                app_state_set_active_screen(&app_state, APP_SCREEN_SETTINGS);
+            } else if (app_state.tariff_has_data || app_state.tariff_status == APP_TARIFF_STATUS_OFFLINE) {
+                app_state_set_active_screen(&app_state, APP_SCREEN_PRIMARY);
+                tariff_entry_released = true;
+            }
+        }
+
         ESP_ERROR_CHECK(ui_router_update(&app_state));
 
         vTaskDelay(pdMS_TO_TICKS(1000));

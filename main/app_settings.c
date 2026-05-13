@@ -1,5 +1,6 @@
 #include "app_settings.h"
 
+#include <ctype.h>
 #include <string.h>
 
 #include <esp_check.h>
@@ -28,6 +29,21 @@ static uint8_t clamp_brightness(uint8_t brightness_percent)
     }
 
     return brightness_percent;
+}
+
+static void normalize_region_code(char *region_code, size_t region_code_size)
+{
+    if (region_code == NULL || region_code_size == 0) {
+        return;
+    }
+
+    if (region_code[0] == '\0') {
+        strlcpy(region_code, "B", region_code_size);
+        return;
+    }
+
+    region_code[0] = (char)toupper((unsigned char)region_code[0]);
+    region_code[1] = '\0';
 }
 
 static esp_err_t load_string_setting(nvs_handle_t handle, const char *key, char *value, size_t value_size)
@@ -101,6 +117,7 @@ esp_err_t app_settings_load(app_settings_t *settings)
     ESP_GOTO_ON_ERROR(load_string_setting(handle, KEY_WIFI_SSID, settings->wifi_ssid, sizeof(settings->wifi_ssid)), cleanup, TAG, "load SSID");
     ESP_GOTO_ON_ERROR(load_string_setting(handle, KEY_WIFI_PSK, settings->wifi_psk, sizeof(settings->wifi_psk)), cleanup, TAG, "load PSK");
     ESP_GOTO_ON_ERROR(load_string_setting(handle, KEY_REGION_CODE, settings->region_code, sizeof(settings->region_code)), cleanup, TAG, "load region code");
+    normalize_region_code(settings->region_code, sizeof(settings->region_code));
 
     err = nvs_get_u8(handle, KEY_BRIGHTNESS, &brightness_percent);
     if (err != ESP_ERR_NVS_NOT_FOUND) {
@@ -130,18 +147,22 @@ esp_err_t app_settings_save(const app_settings_t *settings)
 {
     nvs_handle_t handle = 0;
     esp_err_t ret = nvs_open(SETTINGS_NAMESPACE, NVS_READWRITE, &handle);
+    app_settings_t normalized_settings = {0};
     ESP_RETURN_ON_ERROR(ret, TAG, "open settings namespace");
 
-    ESP_GOTO_ON_ERROR(nvs_set_str(handle, KEY_WIFI_SSID, settings->wifi_ssid), cleanup, TAG, "save SSID");
-    ESP_GOTO_ON_ERROR(nvs_set_str(handle, KEY_WIFI_PSK, settings->wifi_psk), cleanup, TAG, "save PSK");
-    ESP_GOTO_ON_ERROR(nvs_set_str(handle, KEY_REGION_CODE, settings->region_code), cleanup, TAG, "save region code");
+    normalized_settings = *settings;
+    normalize_region_code(normalized_settings.region_code, sizeof(normalized_settings.region_code));
+
+    ESP_GOTO_ON_ERROR(nvs_set_str(handle, KEY_WIFI_SSID, normalized_settings.wifi_ssid), cleanup, TAG, "save SSID");
+    ESP_GOTO_ON_ERROR(nvs_set_str(handle, KEY_WIFI_PSK, normalized_settings.wifi_psk), cleanup, TAG, "save PSK");
+    ESP_GOTO_ON_ERROR(nvs_set_str(handle, KEY_REGION_CODE, normalized_settings.region_code), cleanup, TAG, "save region code");
     ESP_GOTO_ON_ERROR(
-        nvs_set_u8(handle, KEY_BRIGHTNESS, clamp_brightness(settings->brightness_percent)),
+        nvs_set_u8(handle, KEY_BRIGHTNESS, clamp_brightness(normalized_settings.brightness_percent)),
         cleanup,
         TAG,
         "save brightness"
     );
-    ESP_GOTO_ON_ERROR(store_touch_calibration(handle, &settings->touch_calibration), cleanup, TAG, "save touch calibration");
+    ESP_GOTO_ON_ERROR(store_touch_calibration(handle, &normalized_settings.touch_calibration), cleanup, TAG, "save touch calibration");
     ESP_GOTO_ON_ERROR(nvs_commit(handle), cleanup, TAG, "commit settings");
 
 cleanup:

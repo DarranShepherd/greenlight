@@ -6,19 +6,25 @@ The device is intended to answer one question instantly: is now a good time to u
 
 ## Current status
 
-Phase 1 of the delivery plan is complete on hardware.
+Phase 2 of the delivery plan is complete in firmware and has been hardware-tested on the target CYD board.
 
-Implemented today:
+Implemented in phase 2:
 
 - the demo UI has been replaced with a three-screen horizontal router
 - startup now initializes NVS and loads persisted app settings
 - brightness is applied on boot and can be changed from the settings screen
 - brightness changes are persisted in the `settings` NVS namespace
+- the settings screen can scan nearby Wi-Fi networks and accept credentials on-device
+- successful Wi-Fi joins are persisted in NVS for reconnect on reboot
+- startup now attempts Wi-Fi reconnect automatically when saved credentials exist
+- SNTP time sync now runs after Wi-Fi connection and presents London local time on-device
+- touch calibration now runs on-device, stores an affine calibration in NVS, and is applied on boot
+- Wi-Fi join failures now report the underlying disconnect reason instead of collapsing everything into a generic timeout
 
 The current routed shell is still a foundation build:
 
 - primary and detail screens are placeholders for later phases
-- the settings screen currently exposes brightness and the default tariff region only
+- the settings screen now covers Wi-Fi onboarding, brightness, sync status, and touch calibration, but the tariff region picker is still basic
 
 ## Product intent
 
@@ -252,10 +258,11 @@ Likely ESP-IDF facilities:
 
 ### Phase 2: onboarding and time
 
-- implement Wi-Fi scan and join UI
-- add on-screen keyboard flow for PSK entry
-- persist credentials and reconnect automatically on boot
-- add SNTP sync and London timezone handling
+- complete: implement Wi-Fi scan and join UI
+- complete: add on-screen keyboard flow for PSK entry
+- complete: persist credentials and reconnect automatically on boot
+- complete: add SNTP sync and London timezone handling
+- complete: add persisted touch calibration flow for the resistive panel
 
 ### Phase 3: Octopus data pipeline
 
@@ -281,6 +288,8 @@ Likely ESP-IDF facilities:
 
 - The CYD is happy with the LVGL tileview-based horizontal router for full-screen navigation.
 - Persisted user settings are now stored in the `settings` NVS namespace, with brightness already wired end to end.
+- Touch calibration has to be solved in the same pre-rotation coordinate space where the XPT2046 driver callback applies it; solving in rotated LVGL display space produces skewed taps.
+- The current firmware no longer fits the default small app slot and now depends on `CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE`.
 - On this hardware, nested flex layouts plus scrollable content inside the settings tile were less predictable than expected once rotation was applied.
 - For phase 1, the settings controls render more reliably as a compact, explicit layout rather than depending on deeper nested auto-layout and long copy.
 - If a screen must be scrollable, its parent container height still needs to fully account for any absolutely positioned children or the lower content can become unreachable.

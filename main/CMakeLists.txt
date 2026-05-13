@@ -4,14 +4,20 @@ idf_component_register(
         "app_state.c"
         "lcd.c"
         "main.c"
+        "time_manager.c"
         "touch.c"
         "ui_router.c"
+        "wifi_manager.c"
     INCLUDE_DIRS
         "."
     REQUIRES
+        esp_event
+        esp_netif
         esp_driver_gpio
         esp_driver_ledc
         esp_driver_spi
+        esp_wifi
         freertos
+        lwip
         nvs_flash
 )

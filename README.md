@@ -4,6 +4,22 @@ Greenlight is a glanceable kitchen display for Octopus Agile electricity prices,
 
 The device is intended to answer one question instantly: is now a good time to use electricity, and if not, when does it get better?
 
+## Current status
+
+Phase 1 of the delivery plan is complete on hardware.
+
+Implemented today:
+
+- the demo UI has been replaced with a three-screen horizontal router
+- startup now initializes NVS and loads persisted app settings
+- brightness is applied on boot and can be changed from the settings screen
+- brightness changes are persisted in the `settings` NVS namespace
+
+The current routed shell is still a foundation build:
+
+- primary and detail screens are placeholders for later phases
+- the settings screen currently exposes brightness and the default tariff region only
+
 ## Product intent
 
 Greenlight should make half-hourly time-of-use pricing understandable at a glance from across the room.
@@ -147,7 +163,8 @@ The current repository is still a hardware bring-up scaffold. The application sh
 Suggested modules:
 
 - `app_main`: startup orchestration and task launch
-- `settings_store`: NVS-backed persistence for Wi-Fi credentials, region, and brightness
+- `app_settings`: NVS-backed persistence for Wi-Fi credentials, region, and brightness
+- `app_state`: runtime UI and application state shared across modules
 - `wifi_manager`: scanning, connect or reconnect flow, event handling, and status reporting
 - `time_manager`: SNTP setup, timezone configuration, and time-valid checks
 - `octopus_client`: HTTPS requests, JSON parsing, and normalized tariff-slot output
@@ -229,9 +246,9 @@ Likely ESP-IDF facilities:
 
 ### Phase 1: foundation
 
-- replace the demo UI with a screen router and application state model
-- add NVS initialization and settings persistence
-- add brightness persistence and backlight control integration
+- complete: replace the demo UI with a screen router and application state model
+- complete: add NVS initialization and settings persistence
+- complete: add brightness persistence and backlight control integration
 
 ### Phase 2: onboarding and time
 
@@ -259,6 +276,14 @@ Likely ESP-IDF facilities:
 - add min, avg, and max summaries
 - complete the settings screen with region dropdown and brightness control
 - wire horizontal swipe navigation across all three screens
+
+## Implementation notes and learnings
+
+- The CYD is happy with the LVGL tileview-based horizontal router for full-screen navigation.
+- Persisted user settings are now stored in the `settings` NVS namespace, with brightness already wired end to end.
+- On this hardware, nested flex layouts plus scrollable content inside the settings tile were less predictable than expected once rotation was applied.
+- For phase 1, the settings controls render more reliably as a compact, explicit layout rather than depending on deeper nested auto-layout and long copy.
+- If a screen must be scrollable, its parent container height still needs to fully account for any absolutely positioned children or the lower content can become unreachable.
 
 ### Phase 6: polish
 

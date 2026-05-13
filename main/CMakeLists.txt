@@ -1,8 +1,11 @@
 idf_component_register(
     SRCS
+        "app_settings.c"
+        "app_state.c"
         "lcd.c"
         "main.c"
         "touch.c"
+        "ui_router.c"
     INCLUDE_DIRS
         "."
     REQUIRES
@@ -10,4 +13,5 @@ idf_component_register(
         esp_driver_ledc
         esp_driver_spi
         freertos
+        nvs_flash
 )

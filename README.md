@@ -6,9 +6,9 @@ The device is intended to answer one question instantly: is now a good time to u
 
 ## Current status
 
-Phase 3 of the delivery plan is complete in firmware and has been hardware-tested on the target CYD board.
+Phase 4 of the delivery plan is complete in firmware and has been hardware-tested on the target CYD board.
 
-Implemented through phase 3:
+Implemented through phase 4:
 
 - the demo UI has been replaced with a three-screen horizontal router
 - startup now initializes NVS and loads persisted app settings
@@ -26,10 +26,13 @@ Implemented through phase 3:
 - startup tariff failures now surface an offline state instead of pretending stale data is valid
 - later refresh failures keep the last in-memory dataset and mark live refresh as unavailable
 - the firmware now discovers the currently active public Agile product code instead of depending on an expired hardcoded tariff identifier
+- the primary screen now renders a glanceable current-band card with live price, time remaining, next change time, and the next three grouped future blocks
+- `Super Cheap` and `Very Expensive` current periods now receive stronger visual treatment than the other bands, including a subtle animated indicator
+- the phase 4 primary screen has been iterated on-device to tighten the hero layout, center the status indicator, improve top-bar alignment, and make the preview cards denser and easier to read from a distance
 
 The current routed shell is still a foundation build:
 
-- primary and detail routes now expose live tariff status, grouped-period summaries, and offline or stale-refresh messaging, but the final polished phase 4 or 5 layouts are still pending
+- the primary route now exposes the intended phase 4 glanceable layout, while the detail route still exposes live tariff status, grouped-period summaries, and offline or stale-refresh messaging ahead of its phase 5 histogram work
 - the settings screen now covers Wi-Fi onboarding, brightness, sync status, and touch calibration, but the tariff region picker is still basic
 
 ## Product intent
@@ -81,6 +84,12 @@ It shows:
 - how long until the current band ends
 - the clock time when the next band starts
 - the next three grouped future blocks
+
+Current firmware treatment:
+
+- a compact top bar with clock, centered title, and Wi-Fi status
+- a primary hero card with large current price, centered band indicator, and remaining-time summary
+- three dense preview cards that prioritize upcoming block times and representative prices
 
 Grouped blocks are formed by merging adjacent 30-minute tariff slots that fall into the same band.
 
@@ -279,9 +288,9 @@ Likely ESP-IDF facilities:
 
 ### Phase 4: primary screen
 
-- build the main glanceable card based on the grouped current block
-- show remaining time in current band and next three blocks
-- add prominent treatment for `Super Cheap` and `Very Expensive`
+- complete: build the main glanceable card based on the grouped current block
+- complete: show remaining time in current band and next three blocks
+- complete: add prominent treatment for `Super Cheap` and `Very Expensive`
 
 ### Phase 5: detail and settings screens
 

@@ -112,10 +112,13 @@ static void publish_runtime_snapshot(time_t now_local)
     char next_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN] = {0};
     char detail_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN] = {0};
     char updated_text[APP_TARIFF_UPDATED_TEXT_MAX_LEN] = {0};
+    app_tariff_preview_t previews[APP_TARIFF_PREVIEW_MAX] = {0};
     const tariff_slot_t *current_slot = get_current_slot();
     const tariff_block_t *current_block = get_current_block();
     struct tm local_tm = {0};
     size_t next_offset = 0;
+    time_t next_block_start_local = 0;
+    uint8_t preview_count = 0;
 
     localtime_r(&now_local, &local_tm);
 
@@ -154,6 +157,20 @@ static void publish_runtime_snapshot(time_t now_local)
             char start_time[8] = {0};
             char end_time[8] = {0};
             int written = 0;
+
+            if (preview_count == 0) {
+                next_block_start_local = block->start_local;
+            }
+
+            if (preview_count < APP_TARIFF_PREVIEW_MAX) {
+                previews[preview_count++] = (app_tariff_preview_t){
+                    .valid = true,
+                    .start_local = block->start_local,
+                    .end_local = block->end_local,
+                    .representative_price = block->representative_price,
+                    .band = block->band,
+                };
+            }
 
             format_time_compact(start_time, sizeof(start_time), block->start_local);
             format_time_compact(end_time, sizeof(end_time), block->end_local);
@@ -206,6 +223,16 @@ static void publish_runtime_snapshot(time_t now_local)
     format_refresh_time(updated_text, sizeof(updated_text), s_last_success_time);
     app_state_set_tariff_status(s_state, s_tariff_status, true, s_runtime_state.has_tomorrow, status_text);
     app_state_set_tariff_snapshot(s_state, current_text, next_text, detail_text, updated_text);
+    app_state_set_tariff_primary(
+        s_state,
+        current_slot != NULL && current_block != NULL,
+        current_slot != NULL ? current_slot->price_including_vat : 0.0f,
+        current_block != NULL ? current_block->band : TARIFF_BAND_NORMAL,
+        current_block != NULL ? current_block->end_local : 0,
+        next_block_start_local,
+        previews,
+        preview_count
+    );
 }
 
 static void publish_waiting_status(const char *status_text)
@@ -218,6 +245,7 @@ static void publish_waiting_status(const char *status_text)
         "Day summaries will appear here once tariff slots are available",
         "Not refreshed yet"
     );
+    app_state_set_tariff_primary(s_state, false, 0.0f, TARIFF_BAND_NORMAL, 0, 0, NULL, 0);
     s_tariff_status = APP_TARIFF_STATUS_IDLE;
 }
 
@@ -231,6 +259,7 @@ static void publish_offline_status(const char *status_text)
         "No tariff dataset is held on flash. The UI is intentionally showing offline state instead of stale data.",
         "Startup fetch failed"
     );
+    app_state_set_tariff_primary(s_state, false, 0.0f, TARIFF_BAND_NORMAL, 0, 0, NULL, 0);
     s_tariff_status = APP_TARIFF_STATUS_OFFLINE;
 }
 

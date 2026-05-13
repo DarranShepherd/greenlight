@@ -33,6 +33,7 @@ void app_state_init(app_state_t *state, const app_settings_t *settings)
         "Day summaries will appear here once tariff slots are available",
         "Not refreshed yet"
     );
+    app_state_set_tariff_primary(state, false, 0.0f, TARIFF_BAND_NORMAL, 0, 0, NULL, 0);
 }
 
 void app_state_set_active_screen(app_state_t *state, app_screen_t screen)
@@ -132,6 +133,38 @@ void app_state_set_tariff_snapshot(
     copy_text(state->tariff_next_text, sizeof(state->tariff_next_text), next_text);
     copy_text(state->tariff_detail_text, sizeof(state->tariff_detail_text), detail_text);
     copy_text(state->tariff_updated_text, sizeof(state->tariff_updated_text), updated_text);
+}
+
+void app_state_set_tariff_primary(
+    app_state_t *state,
+    bool current_block_valid,
+    float current_price,
+    tariff_band_t current_band,
+    time_t current_block_end_local,
+    time_t next_block_start_local,
+    const app_tariff_preview_t *previews,
+    uint8_t preview_count
+)
+{
+    state->tariff_current_block_valid = current_block_valid;
+    state->tariff_current_price = current_price;
+    state->tariff_current_band = current_band;
+    state->tariff_current_block_end_local = current_block_end_local;
+    state->tariff_next_block_start_local = next_block_start_local;
+
+    if (preview_count > APP_TARIFF_PREVIEW_MAX) {
+        preview_count = APP_TARIFF_PREVIEW_MAX;
+    }
+
+    if (preview_count > 0 && previews != NULL) {
+        memcpy(state->tariff_previews, previews, sizeof(state->tariff_previews[0]) * preview_count);
+    }
+
+    if (preview_count < APP_TARIFF_PREVIEW_MAX) {
+        memset(&state->tariff_previews[preview_count], 0, sizeof(state->tariff_previews[0]) * (APP_TARIFF_PREVIEW_MAX - preview_count));
+    }
+
+    state->tariff_preview_count = preview_count;
 }
 
 const char *app_state_get_screen_name(app_screen_t screen)

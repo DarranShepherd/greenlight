@@ -2,8 +2,10 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <time.h>
 
 #include "app_settings.h"
+#include "tariff_model.h"
 
 #define APP_WIFI_SCAN_MAX_RESULTS 12
 #define APP_WIFI_STATUS_TEXT_MAX_LEN 96
@@ -12,6 +14,7 @@
 #define APP_TARIFF_STATUS_TEXT_MAX_LEN 128
 #define APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN 192
 #define APP_TARIFF_UPDATED_TEXT_MAX_LEN 48
+#define APP_TARIFF_PREVIEW_MAX 3
 
 typedef enum {
     APP_WIFI_STATUS_IDLE = 0,
@@ -50,6 +53,14 @@ typedef enum {
 } app_screen_t;
 
 typedef struct {
+    bool valid;
+    time_t start_local;
+    time_t end_local;
+    float representative_price;
+    tariff_band_t band;
+} app_tariff_preview_t;
+
+typedef struct {
     app_settings_t settings;
     app_screen_t active_screen;
     uint32_t uptime_seconds;
@@ -67,6 +78,13 @@ typedef struct {
     app_tariff_status_t tariff_status;
     bool tariff_has_data;
     bool tariff_tomorrow_available;
+    bool tariff_current_block_valid;
+    float tariff_current_price;
+    tariff_band_t tariff_current_band;
+    time_t tariff_current_block_end_local;
+    time_t tariff_next_block_start_local;
+    uint8_t tariff_preview_count;
+    app_tariff_preview_t tariff_previews[APP_TARIFF_PREVIEW_MAX];
     char tariff_status_text[APP_TARIFF_STATUS_TEXT_MAX_LEN];
     char tariff_current_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN];
     char tariff_next_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN];
@@ -97,6 +115,16 @@ void app_state_set_tariff_snapshot(
     const char *next_text,
     const char *detail_text,
     const char *updated_text
+);
+void app_state_set_tariff_primary(
+    app_state_t *state,
+    bool current_block_valid,
+    float current_price,
+    tariff_band_t current_band,
+    time_t current_block_end_local,
+    time_t next_block_start_local,
+    const app_tariff_preview_t *previews,
+    uint8_t preview_count
 );
 const char *app_state_get_screen_name(app_screen_t screen);
 const char *app_state_get_wifi_status_name(app_wifi_status_t status);

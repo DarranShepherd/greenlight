@@ -15,6 +15,7 @@
 #define APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN 192
 #define APP_TARIFF_UPDATED_TEXT_MAX_LEN 48
 #define APP_TARIFF_PREVIEW_MAX 3
+#define APP_TARIFF_DAY_SLOT_MAX 48
 
 typedef enum {
     APP_WIFI_STATUS_IDLE = 0,
@@ -61,6 +62,21 @@ typedef struct {
 } app_tariff_preview_t;
 
 typedef struct {
+    bool valid;
+    float price;
+    tariff_band_t band;
+} app_tariff_day_slot_t;
+
+typedef struct {
+    bool available;
+    uint8_t slot_count;
+    float min_price;
+    float avg_price;
+    float max_price;
+    app_tariff_day_slot_t slots[APP_TARIFF_DAY_SLOT_MAX];
+} app_tariff_day_view_t;
+
+typedef struct {
     app_settings_t settings;
     app_screen_t active_screen;
     uint32_t uptime_seconds;
@@ -90,6 +106,8 @@ typedef struct {
     char tariff_next_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN];
     char tariff_detail_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN];
     char tariff_updated_text[APP_TARIFF_UPDATED_TEXT_MAX_LEN];
+    app_tariff_day_view_t tariff_today;
+    app_tariff_day_view_t tariff_tomorrow;
 } app_state_t;
 
 void app_state_init(app_state_t *state, const app_settings_t *settings);
@@ -125,6 +143,11 @@ void app_state_set_tariff_primary(
     time_t next_block_start_local,
     const app_tariff_preview_t *previews,
     uint8_t preview_count
+);
+void app_state_set_tariff_detail(
+    app_state_t *state,
+    const app_tariff_day_view_t *today,
+    const app_tariff_day_view_t *tomorrow
 );
 const char *app_state_get_screen_name(app_screen_t screen);
 const char *app_state_get_wifi_status_name(app_wifi_status_t status);

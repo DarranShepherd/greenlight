@@ -6,9 +6,9 @@ The device is intended to answer one question instantly: is now a good time to u
 
 ## Current status
 
-Phase 4 of the delivery plan is complete in firmware and has been hardware-tested on the target CYD board.
+Phase 5 of the delivery plan is complete in firmware and has been hardware-tested on the target CYD board.
 
-Implemented through phase 4:
+Implemented through phase 5:
 
 - the demo UI has been replaced with a three-screen horizontal router
 - startup now initializes NVS and loads persisted app settings
@@ -29,11 +29,17 @@ Implemented through phase 4:
 - the primary screen now renders a glanceable current-band card with live price, time remaining, next change time, and the next three grouped future blocks
 - `Super Cheap` and `Very Expensive` current periods now receive stronger visual treatment than the other bands, including a subtle animated indicator
 - the phase 4 primary screen has been iterated on-device to tighten the hero layout, center the status indicator, improve top-bar alignment, and make the preview cards denser and easier to read from a distance
+- the detail screen now renders per-day tariff histograms with min, average, and max summaries for today and, when published, tomorrow
+- the detail screen now matches the primary route styling with a black background, compact top bar, and tariff-band colors reused in the histogram bars and summary values
+- the today histogram now includes a vertical current-time marker
+- when tomorrow prices are only partially published by Octopus, the chart now preserves the full `0-24` axis and leaves the unpublished trailing hours empty rather than stretching the returned bars to fill the width
+- the heavier phase 5 LVGL scene required increasing `CONFIG_ESP_MAIN_TASK_STACK_SIZE` and `CONFIG_MAIN_TASK_STACK_SIZE` to `8192`
 
-The current routed shell is still a foundation build:
+The current routed shell is now functionally complete for v1, with a few polish items still possible:
 
-- the primary route now exposes the intended phase 4 glanceable layout, while the detail route still exposes live tariff status, grouped-period summaries, and offline or stale-refresh messaging ahead of its phase 5 histogram work
-- the settings screen now covers Wi-Fi onboarding, brightness, sync status, and touch calibration, but the tariff region picker is still basic
+- the primary route exposes the intended glanceable layout for current and upcoming grouped periods
+- the detail route exposes the intended histogram view for today and tomorrow, including single-day fallback before tomorrow is published
+- the settings screen covers Wi-Fi onboarding, brightness, sync status, and touch calibration, but the tariff region picker is still basic
 
 ## Product intent
 
@@ -121,6 +127,7 @@ Behavior:
 
 - before tomorrow's prices are published, show a single-day layout
 - once tomorrow's prices are available, switch automatically to a two-day side-by-side layout
+- if Octopus has only published part of tomorrow, keep the chart scaled to the full day and leave the unpublished hours empty on the right-hand side
 
 ### 3. Settings screen
 
@@ -138,6 +145,8 @@ This screen contains:
 Greenlight will consume the public Octopus Energy API.
 
 For v1, the tariff is determined by the selected region rather than account lookup. The implementation uses the Agile tariff endpoint that returns half-hourly unit rates for the active public import product and selected region, using the VAT-inclusive field for all user-facing calculations.
+
+The public API does not always return a full 48 half-hour slots for tomorrow as soon as the next day appears. In hardware testing on 2026-05-13, the latest published slot ended at `2026-05-14 23:00`, so the firmware now treats missing late-evening slots as unpublished data rather than compressing the histogram.
 
 Initial target assumptions:
 

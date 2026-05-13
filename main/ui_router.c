@@ -39,8 +39,19 @@ typedef struct {
     lv_obj_t *primary_preview_band_labels[APP_TARIFF_PREVIEW_MAX];
     lv_obj_t *primary_preview_price_labels[APP_TARIFF_PREVIEW_MAX];
     lv_obj_t *detail_status_label;
-    lv_obj_t *detail_summary_label;
     lv_obj_t *detail_updated_label;
+    lv_obj_t *detail_top_bar;
+    lv_obj_t *detail_clock_label;
+    lv_obj_t *detail_title_label;
+    lv_obj_t *detail_wifi_label;
+    lv_obj_t *detail_day_panels[2];
+    lv_obj_t *detail_day_titles[2];
+    lv_obj_t *detail_day_bar_rows[2];
+    lv_obj_t *detail_day_bars[2][APP_TARIFF_DAY_SLOT_MAX];
+    lv_obj_t *detail_day_time_markers[2];
+    lv_obj_t *detail_day_min_labels[2];
+    lv_obj_t *detail_day_avg_labels[2];
+    lv_obj_t *detail_day_max_labels[2];
     lv_obj_t *brightness_label;
     lv_obj_t *brightness_bar;
     lv_obj_t *region_label;
@@ -64,6 +75,12 @@ typedef struct {
 } ui_router_view_t;
 
 static ui_router_view_t s_view;
+
+enum {
+    DETAIL_DAY_INDEX_TODAY = 0,
+    DETAIL_DAY_INDEX_TOMORROW = 1,
+    DETAIL_DAY_COUNT = 2,
+};
 
 static const char *s_touch_calibration_prompts[TOUCH_CALIBRATION_POINT_COUNT] = {
     "Touch the upper-left target",
@@ -411,6 +428,148 @@ static void style_preview_card(lv_obj_t *card, lv_obj_t *time_label, lv_obj_t *b
     lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_align(band_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(band_label, &lv_font_montserrat_20, 0);
+}
+
+static lv_color_t get_band_fill_color(tariff_band_t band)
+{
+    return get_primary_palette_for_band(band).hero_bg;
+}
+
+static void style_detail_stat_label(lv_obj_t *label, const char *caption, float value, lv_color_t color)
+{
+    char text[24] = {0};
+    uint32_t color_hex = 0;
+
+    if (label == NULL) {
+        return;
+    }
+
+    color_hex = lv_color_to_u32(color) & 0x00FFFFFFU;
+    lv_label_set_recolor(label, true);
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    snprintf(text, sizeof(text), "%s\n#%06lx %.1f#", caption, (unsigned long)color_hex, (double)value);
+    lv_label_set_text(label, text);
+}
+
+static void update_detail_time_marker_locked(const app_state_t *state)
+{
+    struct tm local_tm = {0};
+    int minutes_of_day = 0;
+    lv_coord_t row_width = 0;
+    lv_coord_t marker_x = 0;
+    lv_obj_t *today_row = s_view.detail_day_bar_rows[DETAIL_DAY_INDEX_TODAY];
+    lv_obj_t *today_marker = s_view.detail_day_time_markers[DETAIL_DAY_INDEX_TODAY];
+
+    if (today_row == NULL || today_marker == NULL) {
+        return;
+    }
+
+    lv_obj_add_flag(s_view.detail_day_time_markers[DETAIL_DAY_INDEX_TOMORROW], LV_OBJ_FLAG_HIDDEN);
+
+    if (!state->time_valid || !state->tariff_today.available) {
+        lv_obj_add_flag(today_marker, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+
+    localtime_r(&(time_t){time(NULL)}, &local_tm);
+    minutes_of_day = (local_tm.tm_hour * 60) + local_tm.tm_min;
+    row_width = lv_obj_get_content_width(today_row);
+    if (row_width <= 2) {
+        lv_obj_add_flag(today_marker, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+
+    marker_x = (lv_coord_t)(((int32_t)minutes_of_day * (row_width - 2)) / (24 * 60));
+    if (marker_x < 0) {
+        marker_x = 0;
+    }
+    if (marker_x > row_width - 2) {
+        marker_x = row_width - 2;
+    }
+
+    lv_obj_set_x(today_marker, marker_x);
+    lv_obj_set_y(today_marker, 0);
+    lv_obj_set_height(today_marker, lv_obj_get_height(today_row));
+    lv_obj_clear_flag(today_marker, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void update_detail_day_panel_locked(uint8_t index, const char *title, const app_tariff_day_view_t *day_view, bool two_day_layout)
+{
+    lv_obj_t *panel = NULL;
+    lv_coord_t chart_height = 72;
+    float max_price = 0.0f;
+
+    if (index >= DETAIL_DAY_COUNT) {
+        return;
+    }
+
+    panel = s_view.detail_day_panels[index];
+    if (panel == NULL) {
+        return;
+    }
+
+    lv_obj_set_width(panel, two_day_layout ? lv_pct(48) : lv_pct(100));
+    lv_obj_set_flex_grow(panel, two_day_layout ? 0 : 1);
+    lv_obj_clear_flag(panel, LV_OBJ_FLAG_HIDDEN);
+
+    if (s_view.detail_day_titles[index] != NULL) {
+        lv_label_set_text(s_view.detail_day_titles[index], title);
+    }
+
+    if (day_view == NULL || !day_view->available || day_view->slot_count == 0) {
+        if (s_view.detail_day_titles[index] != NULL) {
+            lv_label_set_text_fmt(s_view.detail_day_titles[index], "%s\nAwaiting prices", title);
+        }
+
+        for (uint8_t slot_index = 0; slot_index < APP_TARIFF_DAY_SLOT_MAX; slot_index++) {
+            if (s_view.detail_day_bars[index][slot_index] != NULL) {
+                lv_obj_add_flag(s_view.detail_day_bars[index][slot_index], LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+
+        style_detail_stat_label(s_view.detail_day_min_labels[index], "Min", 0.0f, get_band_fill_color(TARIFF_BAND_CHEAP));
+        style_detail_stat_label(s_view.detail_day_avg_labels[index], "Avg", 0.0f, get_band_fill_color(TARIFF_BAND_NORMAL));
+        style_detail_stat_label(s_view.detail_day_max_labels[index], "Max", 0.0f, get_band_fill_color(TARIFF_BAND_EXPENSIVE));
+        return;
+    }
+
+    max_price = day_view->max_price > 0.0f ? day_view->max_price : 1.0f;
+    if (max_price < 5.0f) {
+        max_price = 5.0f;
+    }
+
+    for (uint8_t slot_index = 0; slot_index < APP_TARIFF_DAY_SLOT_MAX; slot_index++) {
+        lv_obj_t *bar = s_view.detail_day_bars[index][slot_index];
+
+        if (bar == NULL) {
+            continue;
+        }
+
+        if (slot_index >= day_view->slot_count || !day_view->slots[slot_index].valid) {
+            lv_obj_set_height(bar, 1);
+            lv_obj_set_style_bg_opa(bar, LV_OPA_TRANSP, 0);
+            lv_obj_clear_flag(bar, LV_OBJ_FLAG_HIDDEN);
+            continue;
+        }
+
+        lv_coord_t height = (lv_coord_t)((day_view->slots[slot_index].price / max_price) * chart_height);
+        if (height < 6) {
+            height = 6;
+        }
+        if (height > chart_height) {
+            height = chart_height;
+        }
+
+        lv_obj_set_height(bar, height);
+        lv_obj_set_style_bg_color(bar, get_band_fill_color(day_view->slots[slot_index].band), 0);
+        lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+        lv_obj_clear_flag(bar, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    style_detail_stat_label(s_view.detail_day_min_labels[index], "Min", day_view->min_price, get_band_fill_color(TARIFF_BAND_CHEAP));
+    style_detail_stat_label(s_view.detail_day_avg_labels[index], "Avg", day_view->avg_price, get_band_fill_color(TARIFF_BAND_NORMAL));
+    style_detail_stat_label(s_view.detail_day_max_labels[index], "Max", day_view->max_price, get_band_fill_color(TARIFF_BAND_EXPENSIVE));
 }
 
 static lv_obj_t *create_section_card(lv_obj_t *parent, lv_color_t bg_color)
@@ -1010,21 +1169,38 @@ static void update_primary_tile_locked(const app_state_t *state)
 
 static void apply_state_locked(const app_state_t *state)
 {
+    char clock_text[12] = {0};
+
     sync_tile_locked(state);
 
     update_primary_tile_locked(state);
+
+    lv_obj_set_style_bg_color(s_view.tiles[APP_SCREEN_DETAIL], lv_color_hex(0x0f172a), 0);
+    format_clock_label(clock_text, sizeof(clock_text), state->local_time_text);
+
+    if (s_view.detail_clock_label != NULL) {
+        lv_label_set_text(s_view.detail_clock_label, clock_text);
+    }
+
+    if (s_view.detail_title_label != NULL) {
+        lv_label_set_text(s_view.detail_title_label, "Daily Prices");
+    }
+
+    if (s_view.detail_wifi_label != NULL) {
+        lv_label_set_text(s_view.detail_wifi_label, state->wifi_status == APP_WIFI_STATUS_CONNECTED ? LV_SYMBOL_WIFI : "");
+    }
 
     if (s_view.detail_status_label != NULL) {
         lv_label_set_text(s_view.detail_status_label, state->tariff_status_text);
     }
 
-    if (s_view.detail_summary_label != NULL) {
-        lv_label_set_text(s_view.detail_summary_label, state->tariff_detail_text);
+    update_detail_day_panel_locked(DETAIL_DAY_INDEX_TODAY, "Today", &state->tariff_today, state->tariff_tomorrow.available);
+    if (state->tariff_tomorrow.available) {
+        update_detail_day_panel_locked(DETAIL_DAY_INDEX_TOMORROW, "Tomorrow", &state->tariff_tomorrow, true);
+    } else if (s_view.detail_day_panels[DETAIL_DAY_INDEX_TOMORROW] != NULL) {
+        lv_obj_add_flag(s_view.detail_day_panels[DETAIL_DAY_INDEX_TOMORROW], LV_OBJ_FLAG_HIDDEN);
     }
-
-    if (s_view.detail_updated_label != NULL) {
-        lv_label_set_text(s_view.detail_updated_label, state->tariff_updated_text);
-    }
+    update_detail_time_marker_locked(state);
 
     if (s_view.brightness_label != NULL) {
         lv_label_set_text_fmt(s_view.brightness_label, "%u%%", (unsigned int)state->settings.brightness_percent);
@@ -1223,36 +1399,180 @@ static void create_primary_tile(lv_obj_t *tile)
 
 static void create_detail_tile(lv_obj_t *tile)
 {
-    lv_obj_set_style_bg_color(tile, lv_color_hex(0x1f2937), 0);
+    lv_obj_set_style_bg_color(tile, lv_color_hex(0x0f172a), 0);
     lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
-    lv_obj_set_style_pad_all(tile, 18, 0);
+    lv_obj_set_style_pad_all(tile, 10, 0);
     lv_obj_set_layout(tile, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(tile, 14, 0);
+    lv_obj_set_style_pad_row(tile, 6, 0);
+    lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
 
-    add_tile_header(
-        tile,
-        "Greenlight / Detail",
-        "Detail route",
-        "Phase 3 exposes the classified tariff dataset and daily summary stats here ahead of the histogram UI in phase 5.",
-        lv_color_white()
-    );
+    s_view.detail_top_bar = lv_obj_create(tile);
+    lv_obj_set_width(s_view.detail_top_bar, lv_pct(100));
+    lv_obj_set_height(s_view.detail_top_bar, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(s_view.detail_top_bar, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_view.detail_top_bar, 0, 0);
+    lv_obj_set_style_pad_all(s_view.detail_top_bar, 0, 0);
+    lv_obj_set_style_pad_column(s_view.detail_top_bar, 8, 0);
+    lv_obj_set_layout(s_view.detail_top_bar, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(s_view.detail_top_bar, LV_FLEX_FLOW_ROW);
+    lv_obj_clear_flag(s_view.detail_top_bar, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *card = create_section_card(tile, lv_color_hex(0x374151));
-    s_view.detail_status_label = lv_label_create(card);
-    lv_obj_set_style_text_color(s_view.detail_status_label, lv_color_hex(0xf9fafb), 0);
+    s_view.detail_clock_label = lv_label_create(s_view.detail_top_bar);
+    lv_obj_set_width(s_view.detail_clock_label, 52);
+    lv_obj_set_style_text_color(s_view.detail_clock_label, lv_color_white(), 0);
+
+    s_view.detail_title_label = lv_label_create(s_view.detail_top_bar);
+    lv_obj_set_flex_grow(s_view.detail_title_label, 1);
+    lv_obj_set_style_text_align(s_view.detail_title_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(s_view.detail_title_label, lv_color_white(), 0);
+
+    s_view.detail_wifi_label = lv_label_create(s_view.detail_top_bar);
+    lv_obj_set_width(s_view.detail_wifi_label, 52);
+    lv_obj_set_style_text_align(s_view.detail_wifi_label, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_color(s_view.detail_wifi_label, lv_color_white(), 0);
+
+    s_view.detail_status_label = lv_label_create(tile);
     lv_obj_set_width(s_view.detail_status_label, lv_pct(100));
+    lv_obj_set_style_text_align(s_view.detail_status_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(s_view.detail_status_label, lv_color_hex(0x64748b), 0);
     lv_label_set_long_mode(s_view.detail_status_label, LV_LABEL_LONG_WRAP);
+    lv_obj_add_flag(s_view.detail_status_label, LV_OBJ_FLAG_HIDDEN);
 
-    s_view.detail_summary_label = lv_label_create(card);
-    lv_obj_set_style_text_color(s_view.detail_summary_label, lv_color_hex(0xe5e7eb), 0);
-    lv_obj_set_width(s_view.detail_summary_label, lv_pct(100));
-    lv_label_set_long_mode(s_view.detail_summary_label, LV_LABEL_LONG_WRAP);
+    lv_obj_t *day_row = lv_obj_create(tile);
+    lv_obj_set_width(day_row, lv_pct(100));
+    lv_obj_set_flex_grow(day_row, 1);
+    lv_obj_set_style_bg_opa(day_row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(day_row, 0, 0);
+    lv_obj_set_style_pad_all(day_row, 0, 0);
+    lv_obj_set_style_pad_column(day_row, 10, 0);
+    lv_obj_set_layout(day_row, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(day_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(day_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_clear_flag(day_row, LV_OBJ_FLAG_SCROLLABLE);
 
-    s_view.detail_updated_label = lv_label_create(card);
-    lv_obj_set_style_text_color(s_view.detail_updated_label, lv_color_hex(0x9ca3af), 0);
-    lv_obj_set_width(s_view.detail_updated_label, lv_pct(100));
-    lv_label_set_long_mode(s_view.detail_updated_label, LV_LABEL_LONG_WRAP);
+    for (uint8_t day_index = 0; day_index < DETAIL_DAY_COUNT; day_index++) {
+        lv_obj_t *panel = lv_obj_create(day_row);
+        lv_obj_set_style_bg_opa(panel, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(panel, 0, 0);
+        lv_obj_set_style_pad_all(panel, 0, 0);
+        lv_obj_set_style_pad_row(panel, 6, 0);
+        lv_obj_set_height(panel, lv_pct(100));
+        lv_obj_set_layout(panel, LV_LAYOUT_FLEX);
+        lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
+        lv_obj_clear_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+        s_view.detail_day_panels[day_index] = panel;
+
+        s_view.detail_day_titles[day_index] = lv_label_create(panel);
+        lv_obj_set_style_text_color(s_view.detail_day_titles[day_index], lv_color_white(), 0);
+        lv_obj_set_style_text_font(s_view.detail_day_titles[day_index], &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_align(s_view.detail_day_titles[day_index], LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_width(s_view.detail_day_titles[day_index], lv_pct(100));
+
+        lv_obj_t *chart_shell = lv_obj_create(panel);
+        lv_obj_set_width(chart_shell, lv_pct(100));
+        lv_obj_set_height(chart_shell, 94);
+        lv_obj_set_style_bg_opa(chart_shell, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(chart_shell, 0, 0);
+        lv_obj_set_style_pad_top(chart_shell, 4, 0);
+        lv_obj_set_style_pad_bottom(chart_shell, 2, 0);
+        lv_obj_set_style_pad_left(chart_shell, 0, 0);
+        lv_obj_set_style_pad_right(chart_shell, 0, 0);
+        lv_obj_set_style_pad_row(chart_shell, 4, 0);
+        lv_obj_set_style_pad_column(chart_shell, 0, 0);
+        lv_obj_set_layout(chart_shell, LV_LAYOUT_FLEX);
+        lv_obj_set_flex_flow(chart_shell, LV_FLEX_FLOW_COLUMN);
+        lv_obj_clear_flag(chart_shell, LV_OBJ_FLAG_SCROLLABLE);
+
+        s_view.detail_day_bar_rows[day_index] = lv_obj_create(chart_shell);
+        lv_obj_set_width(s_view.detail_day_bar_rows[day_index], lv_pct(100));
+        lv_obj_set_height(s_view.detail_day_bar_rows[day_index], 70);
+        lv_obj_set_style_bg_opa(s_view.detail_day_bar_rows[day_index], LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(s_view.detail_day_bar_rows[day_index], 0, 0);
+        lv_obj_set_style_pad_top(s_view.detail_day_bar_rows[day_index], 0, 0);
+        lv_obj_set_style_pad_bottom(s_view.detail_day_bar_rows[day_index], 0, 0);
+        lv_obj_set_style_pad_left(s_view.detail_day_bar_rows[day_index], 0, 0);
+        lv_obj_set_style_pad_right(s_view.detail_day_bar_rows[day_index], 0, 0);
+        lv_obj_set_style_pad_column(s_view.detail_day_bar_rows[day_index], 0, 0);
+        lv_obj_set_style_border_side(s_view.detail_day_bar_rows[day_index], LV_BORDER_SIDE_BOTTOM, 0);
+        lv_obj_set_style_border_color(s_view.detail_day_bar_rows[day_index], lv_color_hex(0x334155), 0);
+        lv_obj_set_style_border_width(s_view.detail_day_bar_rows[day_index], 1, 0);
+        lv_obj_set_layout(s_view.detail_day_bar_rows[day_index], LV_LAYOUT_FLEX);
+        lv_obj_set_flex_flow(s_view.detail_day_bar_rows[day_index], LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(s_view.detail_day_bar_rows[day_index], LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
+        lv_obj_clear_flag(s_view.detail_day_bar_rows[day_index], LV_OBJ_FLAG_SCROLLABLE);
+
+        for (uint8_t slot_index = 0; slot_index < APP_TARIFF_DAY_SLOT_MAX; slot_index++) {
+            s_view.detail_day_bars[day_index][slot_index] = lv_obj_create(s_view.detail_day_bar_rows[day_index]);
+            lv_obj_set_width(s_view.detail_day_bars[day_index][slot_index], 4);
+            lv_obj_set_height(s_view.detail_day_bars[day_index][slot_index], 6);
+            lv_obj_set_style_radius(s_view.detail_day_bars[day_index][slot_index], 2, 0);
+            lv_obj_set_style_bg_color(s_view.detail_day_bars[day_index][slot_index], lv_color_hex(0x374151), 0);
+            lv_obj_set_style_bg_opa(s_view.detail_day_bars[day_index][slot_index], LV_OPA_COVER, 0);
+            lv_obj_set_style_border_width(s_view.detail_day_bars[day_index][slot_index], 0, 0);
+            lv_obj_clear_flag(s_view.detail_day_bars[day_index][slot_index], LV_OBJ_FLAG_SCROLLABLE);
+        }
+
+        s_view.detail_day_time_markers[day_index] = lv_obj_create(s_view.detail_day_bar_rows[day_index]);
+        lv_obj_set_width(s_view.detail_day_time_markers[day_index], 2);
+        lv_obj_set_height(s_view.detail_day_time_markers[day_index], lv_pct(100));
+        lv_obj_set_style_radius(s_view.detail_day_time_markers[day_index], 0, 0);
+        lv_obj_set_style_bg_color(s_view.detail_day_time_markers[day_index], lv_color_white(), 0);
+        lv_obj_set_style_bg_opa(s_view.detail_day_time_markers[day_index], LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(s_view.detail_day_time_markers[day_index], 0, 0);
+        lv_obj_add_flag(s_view.detail_day_time_markers[day_index], LV_OBJ_FLAG_FLOATING | LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(s_view.detail_day_time_markers[day_index]);
+
+        lv_obj_t *axis_row = lv_obj_create(chart_shell);
+        lv_obj_set_width(axis_row, lv_pct(100));
+        lv_obj_set_height(axis_row, LV_SIZE_CONTENT);
+        lv_obj_set_style_bg_opa(axis_row, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(axis_row, 0, 0);
+        lv_obj_set_style_pad_top(axis_row, 2, 0);
+        lv_obj_set_style_pad_bottom(axis_row, 2, 0);
+        lv_obj_set_style_pad_left(axis_row, 0, 0);
+        lv_obj_set_style_pad_right(axis_row, 0, 0);
+        lv_obj_set_layout(axis_row, LV_LAYOUT_FLEX);
+        lv_obj_set_flex_flow(axis_row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(axis_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_clear_flag(axis_row, LV_OBJ_FLAG_SCROLLABLE);
+
+        lv_obj_t *axis_start = lv_label_create(axis_row);
+        lv_label_set_text(axis_start, "0");
+        lv_obj_set_style_text_color(axis_start, lv_color_hex(0x9ca3af), 0);
+
+        lv_obj_t *axis_mid = lv_label_create(axis_row);
+        lv_label_set_text(axis_mid, "12");
+        lv_obj_set_style_text_color(axis_mid, lv_color_hex(0x9ca3af), 0);
+
+        lv_obj_t *axis_end = lv_label_create(axis_row);
+        lv_label_set_text(axis_end, "24");
+        lv_obj_set_style_text_color(axis_end, lv_color_hex(0x9ca3af), 0);
+
+        lv_obj_t *stats_row = lv_obj_create(panel);
+        lv_obj_set_width(stats_row, lv_pct(100));
+        lv_obj_set_height(stats_row, LV_SIZE_CONTENT);
+        lv_obj_set_style_bg_opa(stats_row, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(stats_row, 0, 0);
+        lv_obj_set_style_pad_top(stats_row, 8, 0);
+        lv_obj_set_style_pad_bottom(stats_row, 0, 0);
+        lv_obj_set_style_pad_left(stats_row, 0, 0);
+        lv_obj_set_style_pad_right(stats_row, 0, 0);
+        lv_obj_set_layout(stats_row, LV_LAYOUT_FLEX);
+        lv_obj_set_flex_flow(stats_row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(stats_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_clear_flag(stats_row, LV_OBJ_FLAG_SCROLLABLE);
+
+        s_view.detail_day_min_labels[day_index] = lv_label_create(stats_row);
+        lv_obj_set_width(s_view.detail_day_min_labels[day_index], 48);
+        lv_obj_set_style_text_align(s_view.detail_day_min_labels[day_index], LV_TEXT_ALIGN_LEFT, 0);
+        s_view.detail_day_avg_labels[day_index] = lv_label_create(stats_row);
+        lv_obj_set_width(s_view.detail_day_avg_labels[day_index], 48);
+        lv_obj_set_style_text_align(s_view.detail_day_avg_labels[day_index], LV_TEXT_ALIGN_CENTER, 0);
+        s_view.detail_day_max_labels[day_index] = lv_label_create(stats_row);
+        lv_obj_set_width(s_view.detail_day_max_labels[day_index], 48);
+        lv_obj_set_style_text_align(s_view.detail_day_max_labels[day_index], LV_TEXT_ALIGN_RIGHT, 0);
+    }
 }
 
 static void create_settings_tile(lv_obj_t *tile)

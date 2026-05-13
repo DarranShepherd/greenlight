@@ -167,6 +167,25 @@ void app_state_set_tariff_primary(
     state->tariff_preview_count = preview_count;
 }
 
+void app_state_set_tariff_detail(
+    app_state_t *state,
+    const app_tariff_day_view_t *today,
+    const app_tariff_day_view_t *tomorrow
+)
+{
+    if (today != NULL) {
+        state->tariff_today = *today;
+    } else {
+        memset(&state->tariff_today, 0, sizeof(state->tariff_today));
+    }
+
+    if (tomorrow != NULL) {
+        state->tariff_tomorrow = *tomorrow;
+    } else {
+        memset(&state->tariff_tomorrow, 0, sizeof(state->tariff_tomorrow));
+    }
+}
+
 const char *app_state_get_screen_name(app_screen_t screen)
 {
     switch (screen) {

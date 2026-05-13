@@ -64,6 +64,25 @@ static void format_refresh_time(char *buffer, size_t buffer_size, time_t local_t
     }
 }
 
+static void format_log_timestamp(char *buffer, size_t buffer_size, time_t local_time)
+{
+    struct tm local_tm = {0};
+
+    if (buffer == NULL || buffer_size == 0) {
+        return;
+    }
+
+    if (local_time <= 0) {
+        strlcpy(buffer, "n/a", buffer_size);
+        return;
+    }
+
+    localtime_r(&local_time, &local_tm);
+    if (strftime(buffer, buffer_size, "%Y-%m-%d %H:%M", &local_tm) == 0) {
+        strlcpy(buffer, "n/a", buffer_size);
+    }
+}
+
 static void format_duration(char *buffer, size_t buffer_size, time_t seconds_remaining)
 {
     int hours = 0;
@@ -105,6 +124,49 @@ static const tariff_block_t *get_current_block(void)
     return &s_runtime_state.blocks[s_runtime_state.current_block_index];
 }
 
+static void populate_day_view(int date_key, const tariff_day_summary_t *summary, app_tariff_day_view_t *day_view)
+{
+    if (summary == NULL || day_view == NULL) {
+        return;
+    }
+
+    memset(day_view, 0, sizeof(*day_view));
+
+    if (summary->slot_count == 0) {
+        return;
+    }
+
+    day_view->available = true;
+    day_view->slot_count = summary->slot_count > APP_TARIFF_DAY_SLOT_MAX ? APP_TARIFF_DAY_SLOT_MAX : summary->slot_count;
+    day_view->min_price = summary->min_price;
+    day_view->avg_price = summary->avg_price;
+    day_view->max_price = summary->max_price;
+
+    for (size_t index = 0; index < s_runtime_state.slot_count; index++) {
+        const tariff_slot_t *slot = &s_runtime_state.slots[index];
+        uint8_t slot_index = 0;
+
+        if (tariff_model_get_local_day_key(slot->start_local) != date_key) {
+            continue;
+        }
+
+        slot_index = 0;
+        while (slot_index < day_view->slot_count && day_view->slots[slot_index].valid) {
+            slot_index++;
+        }
+
+        if (slot_index >= day_view->slot_count) {
+            break;
+        }
+
+        day_view->slots[slot_index] = (app_tariff_day_slot_t){
+            .valid = true,
+            .price = slot->price_including_vat,
+            .band = slot->band,
+        };
+    }
+}
+
 static void publish_runtime_snapshot(time_t now_local)
 {
     char status_text[APP_TARIFF_STATUS_TEXT_MAX_LEN] = {0};
@@ -113,6 +175,8 @@ static void publish_runtime_snapshot(time_t now_local)
     char detail_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN] = {0};
     char updated_text[APP_TARIFF_UPDATED_TEXT_MAX_LEN] = {0};
     app_tariff_preview_t previews[APP_TARIFF_PREVIEW_MAX] = {0};
+    app_tariff_day_view_t today_view = {0};
+    app_tariff_day_view_t tomorrow_view = {0};
     const tariff_slot_t *current_slot = get_current_slot();
     const tariff_block_t *current_block = get_current_block();
     struct tm local_tm = {0};
@@ -221,6 +285,8 @@ static void publish_runtime_snapshot(time_t now_local)
     }
 
     format_refresh_time(updated_text, sizeof(updated_text), s_last_success_time);
+    populate_day_view(s_runtime_state.today_summary.date_key, &s_runtime_state.today_summary, &today_view);
+    populate_day_view(s_runtime_state.tomorrow_summary.date_key, &s_runtime_state.tomorrow_summary, &tomorrow_view);
     app_state_set_tariff_status(s_state, s_tariff_status, true, s_runtime_state.has_tomorrow, status_text);
     app_state_set_tariff_snapshot(s_state, current_text, next_text, detail_text, updated_text);
     app_state_set_tariff_primary(
@@ -233,6 +299,7 @@ static void publish_runtime_snapshot(time_t now_local)
         previews,
         preview_count
     );
+    app_state_set_tariff_detail(s_state, &today_view, &tomorrow_view);
 }
 
 static void publish_waiting_status(const char *status_text)
@@ -246,6 +313,7 @@ static void publish_waiting_status(const char *status_text)
         "Not refreshed yet"
     );
     app_state_set_tariff_primary(s_state, false, 0.0f, TARIFF_BAND_NORMAL, 0, 0, NULL, 0);
+    app_state_set_tariff_detail(s_state, NULL, NULL);
     s_tariff_status = APP_TARIFF_STATUS_IDLE;
 }
 
@@ -260,6 +328,7 @@ static void publish_offline_status(const char *status_text)
         "Startup fetch failed"
     );
     app_state_set_tariff_primary(s_state, false, 0.0f, TARIFF_BAND_NORMAL, 0, 0, NULL, 0);
+    app_state_set_tariff_detail(s_state, NULL, NULL);
     s_tariff_status = APP_TARIFF_STATUS_OFFLINE;
 }
 
@@ -283,6 +352,29 @@ static esp_err_t refresh_tariffs(time_t now_local)
         return ESP_ERR_INVALID_RESPONSE;
     }
 
+    time_t latest_end_local = 0;
+    time_t latest_tomorrow_end_local = 0;
+    char latest_end_text[24] = {0};
+    char latest_tomorrow_end_text[24] = {0};
+    int tomorrow_key = tariff_model_get_local_day_key(now_local + (24 * 60 * 60));
+
+    for (size_t index = 0; index < fetched_slot_count; index++) {
+        if (s_fetched_slots[index].end_local > latest_end_local) {
+            latest_end_local = s_fetched_slots[index].end_local;
+        }
+    }
+
+    for (size_t index = 0; index < s_next_runtime_state.slot_count; index++) {
+        const tariff_slot_t *slot = &s_next_runtime_state.slots[index];
+
+        if (tariff_model_get_local_day_key(slot->start_local) == tomorrow_key && slot->end_local > latest_tomorrow_end_local) {
+            latest_tomorrow_end_local = slot->end_local;
+        }
+    }
+
+    format_log_timestamp(latest_end_text, sizeof(latest_end_text), latest_end_local);
+    format_log_timestamp(latest_tomorrow_end_text, sizeof(latest_tomorrow_end_text), latest_tomorrow_end_local);
+
     s_runtime_state = s_next_runtime_state;
     s_has_successful_load = true;
     s_last_success_time = now_local;
@@ -291,11 +383,13 @@ static esp_err_t refresh_tariffs(time_t now_local)
     publish_runtime_snapshot(now_local);
     ESP_LOGI(
         TAG,
-        "Tariff refresh ready: %u slots, %u blocks, today=%u slots, tomorrow=%s",
+        "Tariff refresh ready: %u slots, %u blocks, today=%u slots, tomorrow=%s, latest_end=%s, tomorrow_end=%s",
         (unsigned int)s_runtime_state.slot_count,
         (unsigned int)s_runtime_state.block_count,
         (unsigned int)s_runtime_state.today_summary.slot_count,
-        s_runtime_state.has_tomorrow ? "yes" : "no"
+        s_runtime_state.has_tomorrow ? "yes" : "no",
+        latest_end_text,
+        latest_tomorrow_end_local > 0 ? latest_tomorrow_end_text : "n/a"
     );
     return ESP_OK;
 }

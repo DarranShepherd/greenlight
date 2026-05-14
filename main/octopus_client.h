@@ -23,3 +23,5 @@ esp_err_t octopus_client_fetch_tariffs(
     size_t max_slots,
     size_t *slot_count
 );
+
+void octopus_client_release_memory(void);

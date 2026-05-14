@@ -48,6 +48,7 @@ static octopus_product_discovery_parser_t s_product_discovery_parser = {0};
 static esp_err_t discover_active_product_code_streaming(char *product_code, size_t product_code_size);
 static esp_err_t ensure_http_buffer_capacity(http_buffer_t *buffer, size_t required_capacity);
 static void reset_http_buffer(http_buffer_t *buffer, size_t max_response_bytes);
+static void free_http_buffer(http_buffer_t *buffer);
 
 static esp_err_t ensure_http_buffer_capacity(http_buffer_t *buffer, size_t required_capacity)
 {
@@ -96,6 +97,25 @@ static void reset_http_buffer(http_buffer_t *buffer, size_t max_response_bytes)
     if (buffer->data != NULL && buffer->capacity > 0) {
         buffer->data[0] = '\0';
     }
+}
+
+static void free_http_buffer(http_buffer_t *buffer)
+{
+    if (buffer == NULL) {
+        return;
+    }
+
+    free(buffer->data);
+    buffer->data = NULL;
+    buffer->length = 0;
+    buffer->capacity = 0;
+    buffer->max_response_bytes = 0;
+    buffer->error = ESP_OK;
+}
+
+void octopus_client_release_memory(void)
+{
+    free_http_buffer(&s_shared_response_buffer);
 }
 
 static void format_utc_timestamp(char *buffer, size_t buffer_size, time_t timestamp)
@@ -341,8 +361,11 @@ esp_err_t octopus_client_fetch_tariffs(
     reset_http_buffer(&s_shared_response_buffer, OCTOPUS_TARIFFS_MAX_RESPONSE_BYTES);
     err = perform_get_request(url, &s_shared_response_buffer);
     if (err != ESP_OK) {
+        octopus_client_release_memory();
         return err;
     }
 
-    return octopus_client_parse_slots_from_response(s_shared_response_buffer.data, slots, max_slots, slot_count);
+    err = octopus_client_parse_slots_from_response(s_shared_response_buffer.data, slots, max_slots, slot_count);
+    octopus_client_release_memory();
+    return err;
 }

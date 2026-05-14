@@ -666,11 +666,21 @@ void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
         );
     }
 
+    if (view->firmware_update_progress_bar != NULL) {
+        bool should_show_progress = state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_DOWNLOADING ||
+                                    state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_APPLYING ||
+                                    state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_REBOOTING;
+
+        if (should_show_progress) {
+            lv_obj_clear_flag(view->firmware_update_progress_bar, LV_OBJ_FLAG_HIDDEN);
+            lv_bar_set_value(view->firmware_update_progress_bar, state->firmware_update_progress_percent, LV_ANIM_OFF);
+        } else {
+            lv_obj_add_flag(view->firmware_update_progress_bar, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
     if (view->firmware_update_button != NULL) {
-        bool should_show_button = state->firmware_update_available ||
-                                  state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_DOWNLOADING ||
-                                  state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_APPLYING ||
-                                  state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_REBOOTING;
+        bool should_show_button = state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_AVAILABLE;
 
         if (should_show_button) {
             lv_obj_clear_flag(view->firmware_update_button, LV_OBJ_FLAG_HIDDEN);
@@ -964,6 +974,18 @@ void ui_settings_create(lv_obj_t *screen, lv_obj_t *tile, ui_router_view_t *view
     lv_obj_add_event_cb(view->firmware_update_button, firmware_update_button_event_cb, LV_EVENT_CLICKED, view);
     lv_obj_add_flag(view->firmware_update_button, LV_OBJ_FLAG_HIDDEN);
     view->firmware_update_button_label = lv_obj_get_child(view->firmware_update_button, 0);
+
+    view->firmware_update_progress_bar = lv_bar_create(firmware_card);
+    lv_obj_set_width(view->firmware_update_progress_bar, lv_pct(100));
+    lv_obj_set_height(view->firmware_update_progress_bar, 12);
+    lv_bar_set_range(view->firmware_update_progress_bar, 0, 100);
+    lv_obj_set_style_bg_color(view->firmware_update_progress_bar, lv_color_hex(0x374151), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(view->firmware_update_progress_bar, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(view->firmware_update_progress_bar, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(view->firmware_update_progress_bar, lv_color_hex(0x2563eb), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(view->firmware_update_progress_bar, LV_OPA_COVER, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(view->firmware_update_progress_bar, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+    lv_obj_add_flag(view->firmware_update_progress_bar, LV_OBJ_FLAG_HIDDEN);
 
     view->wifi_keyboard = lv_keyboard_create(tile);
     lv_obj_set_width(view->wifi_keyboard, lv_pct(100));

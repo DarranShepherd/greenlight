@@ -70,6 +70,7 @@ typedef struct {
     lv_obj_t *firmware_status_label;
     lv_obj_t *firmware_update_button;
     lv_obj_t *firmware_update_button_label;
+    lv_obj_t *firmware_update_progress_bar;
     lv_obj_t *wifi_dropdown;
     lv_obj_t *wifi_psk_textarea;
     lv_obj_t *wifi_keyboard;

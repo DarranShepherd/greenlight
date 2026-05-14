@@ -6,4 +6,3 @@ managed_components/
 sdkconfig
 sdkconfig.old
 compile_commands.json
-PLAN.md

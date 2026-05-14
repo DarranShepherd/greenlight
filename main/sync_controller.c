@@ -572,3 +572,66 @@ void sync_controller_request_refresh(void)
             : "Region changed. Refreshing Octopus Agile prices"
     );
 }
+
+#ifdef GREENLIGHT_HOST_TEST
+#include "sync_controller_internal.h"
+
+void sync_controller_test_reset(app_state_t *state, app_settings_t *settings, const char *region_code)
+{
+    memset(&s_runtime_state, 0, sizeof(s_runtime_state));
+    memset(&s_next_runtime_state, 0, sizeof(s_next_runtime_state));
+    memset(s_fetched_slots, 0, sizeof(s_fetched_slots));
+    memset(s_active_region_code, 0, sizeof(s_active_region_code));
+
+    s_state = NULL;
+    s_has_successful_load = false;
+    s_last_attempt_time = 0;
+    s_last_success_time = 0;
+    s_loaded_today_key = 0;
+    s_tariff_status = APP_TARIFF_STATUS_IDLE;
+    s_refresh_requested = false;
+
+    memset(settings, 0, sizeof(*settings));
+    strlcpy(settings->region_code, region_code, sizeof(settings->region_code));
+    settings->brightness_percent = APP_SETTINGS_DEFAULT_BRIGHTNESS_PERCENT;
+
+    app_state_init(state, settings);
+    app_state_set_time_status(state, APP_TIME_STATUS_VALID, true, "Time synchronized");
+    s_state = state;
+}
+
+esp_err_t sync_controller_test_refresh_tariffs(time_t now_local)
+{
+    return refresh_tariffs(now_local);
+}
+
+void sync_controller_test_publish_runtime_snapshot(time_t now_local)
+{
+    publish_runtime_snapshot(now_local);
+}
+
+void sync_controller_test_set_tariff_status(app_tariff_status_t status)
+{
+    s_tariff_status = status;
+}
+
+const runtime_tariff_state_t *sync_controller_test_get_runtime_state(void)
+{
+    return &s_runtime_state;
+}
+
+bool sync_controller_test_get_refresh_requested(void)
+{
+    return s_refresh_requested;
+}
+
+bool sync_controller_test_get_has_successful_load(void)
+{
+    return s_has_successful_load;
+}
+
+const char *sync_controller_test_get_active_region_code(void)
+{
+    return get_active_region_code();
+}
+#endif

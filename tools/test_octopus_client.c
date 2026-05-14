@@ -1,76 +1,17 @@
 #define _GNU_SOURCE
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-#include "esp_crt_bundle.h"
-#include "esp_http_client.h"
-
-static size_t host_test_strlcpy(char *destination, const char *source, size_t destination_size)
-{
-    size_t source_length = 0;
-
-    if (destination_size == 0) {
-        return source != NULL ? strlen(source) : 0;
-    }
-
-    if (source == NULL) {
-        destination[0] = '\0';
-        return 0;
-    }
-
-    source_length = strlen(source);
-
-    if (source_length >= destination_size) {
-        memcpy(destination, source, destination_size - 1);
-        destination[destination_size - 1] = '\0';
-    } else {
-        memcpy(destination, source, source_length + 1);
-    }
-
-    return source_length;
-}
-
-#define strlcpy host_test_strlcpy
-
-esp_http_client_handle_t esp_http_client_init(const esp_http_client_config_t *config)
-{
-    (void)config;
-    return NULL;
-}
-
-esp_err_t esp_http_client_perform(esp_http_client_handle_t client)
-{
-    (void)client;
-    return ESP_FAIL;
-}
-
-int esp_http_client_get_status_code(esp_http_client_handle_t client)
-{
-    (void)client;
-    return 0;
-}
-
-esp_err_t esp_http_client_cleanup(esp_http_client_handle_t client)
-{
-    (void)client;
-    return ESP_OK;
-}
-
-esp_err_t esp_crt_bundle_attach(void *conf)
-{
-    (void)conf;
-    return ESP_OK;
-}
-
-#include "../main/octopus_client.c"
-
-#undef strlcpy
+#include "octopus_client_internal.h"
 
 static const char *PRODUCT_DISCOVERY_FIXTURE =
     "{"
@@ -103,12 +44,102 @@ static const char *INVALID_TARIFF_FIXTURE =
     "]"
     "}";
 
+static const char *MALFORMED_PRODUCT_DISCOVERY_FIXTURE =
+    "{"
+    "\"count\":1,"
+    "\"results\":["
+    "{\"code\":\"AGILE-25-02-01\",\"direction\":\"IMPORT\",}"
+    "]"
+    "}";
+
+static const char *NON_MATCHING_PRODUCT_DISCOVERY_FIXTURE =
+    "{"
+    "\"count\":2,"
+    "\"results\":["
+    "{\"code\":\"AGILE-25-02-01\",\"direction\":\"IMPORT\"},"
+    "{\"code\":\"AGILE-OUTGOING-25-02-01\",\"direction\":\"EXPORT\",\"display_name\":\"Agile Octopus\"}"
+    "]"
+    "}";
+
+static esp_err_t discover_active_product_code_streaming_fixture(
+    const char *response,
+    size_t chunk_size,
+    char *product_code,
+    size_t product_code_size
+)
+{
+    octopus_product_discovery_parser_t parser = {0};
+    size_t response_length = response != NULL ? strlen(response) : 0;
+    bool matched = false;
+    bool done = false;
+    esp_err_t err = ESP_OK;
+
+    octopus_product_discovery_parser_init(&parser);
+
+    for (size_t offset = 0; offset < response_length; offset += chunk_size) {
+        size_t current_chunk_size = response_length - offset;
+
+        if (current_chunk_size > chunk_size) {
+            current_chunk_size = chunk_size;
+        }
+
+        err = octopus_product_discovery_parser_feed(
+            &parser,
+            response + offset,
+            current_chunk_size,
+            product_code,
+            product_code_size,
+            &matched,
+            &done
+        );
+        if (err != ESP_OK) {
+            return err;
+        }
+
+        if (done) {
+            return matched ? ESP_OK : ESP_ERR_NOT_FOUND;
+        }
+    }
+
+    return ESP_ERR_NOT_FOUND;
+}
+
 static void test_product_discovery_parser(void)
 {
     char product_code[32] = {0};
 
-    assert(discover_active_product_code_from_response(PRODUCT_DISCOVERY_FIXTURE, product_code, sizeof(product_code)) == ESP_OK);
+    assert(discover_active_product_code_streaming_fixture(PRODUCT_DISCOVERY_FIXTURE, 17, product_code, sizeof(product_code)) == ESP_OK);
     assert(strcmp(product_code, "AGILE-25-02-01") == 0);
+}
+
+static void test_product_discovery_parser_rejects_malformed_streamed_object(void)
+{
+    char product_code[32] = {0};
+
+    assert(
+        discover_active_product_code_streaming_fixture(
+            MALFORMED_PRODUCT_DISCOVERY_FIXTURE,
+            11,
+            product_code,
+            sizeof(product_code)
+        ) == ESP_ERR_INVALID_RESPONSE
+    );
+    assert(product_code[0] == '\0');
+}
+
+static void test_product_discovery_parser_returns_not_found_for_non_matching_results(void)
+{
+    char product_code[32] = {0};
+
+    assert(
+        discover_active_product_code_streaming_fixture(
+            NON_MATCHING_PRODUCT_DISCOVERY_FIXTURE,
+            23,
+            product_code,
+            sizeof(product_code)
+        ) == ESP_ERR_NOT_FOUND
+    );
+    assert(product_code[0] == '\0');
 }
 
 static void test_tariff_parser_skips_malformed_rows(void)
@@ -116,7 +147,7 @@ static void test_tariff_parser_skips_malformed_rows(void)
     tariff_slot_t slots[8] = {0};
     size_t slot_count = 0;
 
-    assert(parse_slots_from_response(TARIFF_FIXTURE_WITH_PARTIAL_ROWS, slots, 8, &slot_count) == ESP_OK);
+    assert(octopus_client_parse_slots_from_response(TARIFF_FIXTURE_WITH_PARTIAL_ROWS, slots, 8, &slot_count) == ESP_OK);
     assert(slot_count == 3);
     assert(slots[0].price_including_vat == 12.34f);
     assert(slots[1].price_including_vat == 9.99f);
@@ -129,7 +160,7 @@ static void test_tariff_parser_rejects_all_invalid_rows(void)
     tariff_slot_t slots[4] = {0};
     size_t slot_count = 99;
 
-    assert(parse_slots_from_response(INVALID_TARIFF_FIXTURE, slots, 4, &slot_count) == ESP_ERR_INVALID_RESPONSE);
+    assert(octopus_client_parse_slots_from_response(INVALID_TARIFF_FIXTURE, slots, 4, &slot_count) == ESP_ERR_INVALID_RESPONSE);
     assert(slot_count == 0);
 }
 
@@ -139,6 +170,8 @@ int main(void)
     tzset();
 
     test_product_discovery_parser();
+    test_product_discovery_parser_rejects_malformed_streamed_object();
+    test_product_discovery_parser_returns_not_found_for_non_matching_results();
     test_tariff_parser_skips_malformed_rows();
     test_tariff_parser_rejects_all_invalid_rows();
 

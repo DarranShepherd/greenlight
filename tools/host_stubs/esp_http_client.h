@@ -28,11 +28,16 @@ typedef struct {
     void *user_data;
     int timeout_ms;
     esp_err_t (*crt_bundle_attach)(void *conf);
+    const char *cert_pem;
 } esp_http_client_config_t;
 
 typedef void *esp_http_client_handle_t;
 
 esp_http_client_handle_t esp_http_client_init(const esp_http_client_config_t *config);
+esp_err_t esp_http_client_open(esp_http_client_handle_t client, int content_length);
+int esp_http_client_fetch_headers(esp_http_client_handle_t client);
+int esp_http_client_read(esp_http_client_handle_t client, char *buffer, int len);
+esp_err_t esp_http_client_close(esp_http_client_handle_t client);
 esp_err_t esp_http_client_perform(esp_http_client_handle_t client);
 int esp_http_client_get_status_code(esp_http_client_handle_t client);
 esp_err_t esp_http_client_cleanup(esp_http_client_handle_t client);

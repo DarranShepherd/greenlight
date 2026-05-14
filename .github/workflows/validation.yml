@@ -31,13 +31,8 @@ jobs:
       - name: Verify generated assets are up to date
         shell: bash
         run: |
-          git diff --exit-code -- main/lv_font_montserrat_20_numeric.c main/lv_font_montserrat_28_numeric.c main/splash_logo.c main/splash_logo.h
-
-      - name: Build ESP-IDF firmware
-        shell: bash
-        run: |
           . /opt/esp/idf/export.sh
-          idf.py -B build-ci reconfigure build
+          sh tools/validate.sh firmware
 
   host-tests:
     name: Host Tests
@@ -52,4 +47,4 @@ jobs:
           sudo apt-get install --yes build-essential libcjson-dev
 
       - name: Run host-side logic tests
-        run: sh tools/run_host_tests.sh
+        run: sh tools/validate.sh host

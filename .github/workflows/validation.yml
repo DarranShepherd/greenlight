@@ -23,14 +23,6 @@ jobs:
           apt-get install --yes nodejs npm python3-cairosvg python3-pil
           npm install --global lv_font_conv
 
-      - name: Regenerate generated assets
-        shell: bash
-        run: |
-          . /opt/esp/idf/export.sh
-          git config --global --add safe.directory "$PWD"
-          idf.py reconfigure
-          python3 tools/generate_assets.py
-
       - name: Verify generated assets are up to date
         shell: bash
         run: |

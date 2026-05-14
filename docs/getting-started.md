@@ -70,6 +70,55 @@ Firmware-only validation when you are iterating on ESP-IDF code or generated ass
 sh tools/validate.sh firmware
 ```
 
+## Generated Assets
+
+Some firmware assets are generated and checked into the repository.
+
+Regenerate them from the repository root with:
+
+```sh
+python3 tools/generate_assets.py
+```
+
+This refreshes the embedded splash asset and the custom LVGL subset fonts. CI also regenerates these assets during firmware validation and fails if the committed generated files are stale.
+
+## Debug Build
+
+For a local debug-oriented build with assertions, the perf monitor, and the runtime GDB stub enabled:
+
+```sh
+SDKCONFIG=sdkconfig.debug \
+SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.debug.defaults" \
+idf.py build
+```
+
+## Documentation Screenshots
+
+The public README screenshots are checked into [docs/img](../docs/img). To regenerate documentation captures from hardware, use the dedicated docs screenshot profile instead of the normal firmware build.
+
+Install the extra host dependency first:
+
+```sh
+python3 -m pip install pyserial
+```
+
+Then build and flash the docs profile:
+
+```sh
+idf.py -B build-docs \
+	-DSDKCONFIG=sdkconfig.docs-screenshots \
+	-DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.docs-screenshots.defaults" \
+	build flash
+```
+
+Capture screenshots from the board:
+
+```sh
+python3 tools/capture_doc_screenshots.py --port /dev/ttyUSB0 --reset-on-connect
+```
+
+This flow keeps the normal firmware build untouched. It uses a separate `build-docs/` directory, boots into a deterministic documentation mode, renders curated UI states, and writes captured PNGs to `docs/generated/screenshots/` by default.
+
 ## Real Hardware Validation
 
 Use real hardware when you need to validate board-specific behavior such as display output, touch input, Wi-Fi onboarding, time sync, or live Octopus API traffic.
@@ -82,3 +131,13 @@ idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
 Host-only validation is sufficient for parser and refresh-logic regressions, but it does not cover the LVGL UI, peripherals, Wi-Fi, TLS, or serial flashing.
+
+## Target Hardware
+
+The repository is currently configured for the common Cheap Yellow Display class board, typically sold as ESP32-2432S028R hardware, with:
+
+- 240x320 ILI9341 TFT
+- XPT2046 resistive touch controller
+- LVGL 9 via `esp_lvgl_port`
+
+If your board variant differs, update [main/hardware.h](../main/hardware.h) and the corresponding panel or touch setup before flashing.

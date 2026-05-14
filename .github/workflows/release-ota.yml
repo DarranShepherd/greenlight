@@ -37,6 +37,7 @@ jobs:
         shell: bash
         run: |
           set -eu
+          . /opt/esp/idf/export.sh
           mkdir -p dist
           cp build/greenlight.bin dist/firmware.bin
           VERSION="${GITHUB_REF_NAME#v}"

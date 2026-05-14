@@ -73,6 +73,7 @@ If pricing cannot be loaded on startup, the device surfaces an offline state ins
 - Touchscreen calibration stored in NVS
 - Adjustable display brightness
 - Region selection for Octopus Agile pricing
+- Manual OTA firmware update checks and installs from the Settings screen
 - Startup splash screen with live status text
 - Current and upcoming tariff block summaries
 - Today and tomorrow histogram views when data is available
@@ -104,6 +105,8 @@ idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
 The project is developed against ESP-IDF 6.0. The checked-in dev container is the easiest way to get a matching environment.
+
+Tagged releases also publish OTA update artifacts to GitHub Releases so deployed devices can check for and install newer firmware from Settings.
 
 ## Contributing
 

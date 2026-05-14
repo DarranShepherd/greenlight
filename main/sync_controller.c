@@ -27,6 +27,7 @@ static app_state_t *s_state;
 static runtime_tariff_state_t s_runtime_state;
 static runtime_tariff_state_t s_next_runtime_state;
 static tariff_slot_t s_fetched_slots[TARIFF_MODEL_MAX_SLOTS];
+static size_t s_fetched_slot_count;
 static bool s_has_successful_load;
 static time_t s_last_attempt_time;
 static time_t s_last_success_time;
@@ -202,6 +203,34 @@ static void populate_day_view(int date_key, const tariff_day_summary_t *summary,
     }
 }
 
+static void refresh_runtime_state_for_time(time_t now_local)
+{
+    if (!s_has_successful_load) {
+        return;
+    }
+
+    s_runtime_state.current_slot_index = -1;
+    s_runtime_state.current_block_index = -1;
+
+    for (size_t index = 0; index < s_runtime_state.slot_count; index++) {
+        const tariff_slot_t *slot = &s_runtime_state.slots[index];
+
+        if (now_local >= slot->start_local && now_local < slot->end_local) {
+            s_runtime_state.current_slot_index = (int)index;
+            break;
+        }
+    }
+
+    for (size_t index = 0; index < s_runtime_state.block_count; index++) {
+        const tariff_block_t *block = &s_runtime_state.blocks[index];
+
+        if (now_local >= block->start_local && now_local < block->end_local) {
+            s_runtime_state.current_block_index = (int)index;
+            break;
+        }
+    }
+}
+
 static void publish_runtime_snapshot(time_t now_local)
 {
     char requested_region_code[APP_SETTINGS_REGION_CODE_MAX_LEN + 1] = {0};
@@ -219,6 +248,10 @@ static void publish_runtime_snapshot(time_t now_local)
     size_t next_offset = 0;
     time_t next_block_start_local = 0;
     uint8_t preview_count = 0;
+
+    refresh_runtime_state_for_time(now_local);
+    current_slot = get_current_slot();
+    current_block = get_current_block();
 
     localtime_r(&now_local, &local_tm);
     get_requested_region_code(requested_region_code, sizeof(requested_region_code));
@@ -427,6 +460,7 @@ static esp_err_t refresh_tariffs(time_t now_local)
     format_log_timestamp(latest_end_text, sizeof(latest_end_text), latest_end_local);
     format_log_timestamp(latest_tomorrow_end_text, sizeof(latest_tomorrow_end_text), latest_tomorrow_end_local);
 
+    s_fetched_slot_count = fetched_slot_count;
     s_runtime_state = s_next_runtime_state;
     strlcpy(s_active_region_code, requested_region, sizeof(s_active_region_code));
     s_has_successful_load = true;
@@ -581,6 +615,7 @@ void sync_controller_test_reset(app_state_t *state, app_settings_t *settings, co
     memset(&s_runtime_state, 0, sizeof(s_runtime_state));
     memset(&s_next_runtime_state, 0, sizeof(s_next_runtime_state));
     memset(s_fetched_slots, 0, sizeof(s_fetched_slots));
+    s_fetched_slot_count = 0;
     memset(s_active_region_code, 0, sizeof(s_active_region_code));
 
     s_state = NULL;

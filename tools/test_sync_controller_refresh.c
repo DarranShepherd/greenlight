@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#define GREENLIGHT_HOST_TEST 1
 
 #include <assert.h>
 #include <stdbool.h>
@@ -265,6 +266,33 @@ static void test_partial_tomorrow_publication_populates_day_views_without_full_d
     assert(strstr(state.tariff_detail_text, "Tomorrow 6 slots") != NULL);
 }
 
+static void test_runtime_snapshot_rolls_forward_when_time_crosses_block_boundary(void)
+{
+    app_settings_t settings = {0};
+    app_state_t state = {0};
+    time_t now_local = 0;
+
+    setenv("TZ", "UTC", 1);
+    tzset();
+
+    now_local = make_local_timestamp(2024, 5, 14, 13, 50, 0);
+
+    reset_harness(&state, &settings, "B");
+    load_linear_slots(make_local_timestamp(2024, 5, 14, 13, 30, 0), 4, 10.0f, 10.0f);
+
+    assert(sync_controller_test_refresh_tariffs(now_local) == ESP_OK);
+    assert(state.tariff_current_block_valid);
+    assert(state.tariff_current_price == 10.0f);
+    assert(state.tariff_current_block_end_local == make_local_timestamp(2024, 5, 14, 14, 0, 0));
+
+    sync_controller_test_publish_runtime_snapshot(make_local_timestamp(2024, 5, 14, 14, 7, 0));
+
+    assert(state.tariff_current_block_valid);
+    assert(state.tariff_current_price == 20.0f);
+    assert(state.tariff_current_block_end_local == make_local_timestamp(2024, 5, 14, 14, 30, 0));
+    assert(strstr(state.tariff_current_text, "until 14:30") != NULL);
+}
+
 static void test_tariff_model_handles_london_spring_forward_day(void)
 {
     tariff_slot_t slots[TARIFF_MODEL_MAX_SLOTS] = {0};
@@ -301,6 +329,7 @@ int main(void)
     test_region_switch_failure_preserves_last_good_dataset();
     test_region_switch_retry_commits_new_dataset_after_stale_failure();
     test_partial_tomorrow_publication_populates_day_views_without_full_day_assumption();
+    test_runtime_snapshot_rolls_forward_when_time_crosses_block_boundary();
     test_tariff_model_handles_london_spring_forward_day();
 
     puts("sync_controller refresh preservation harness passed");

@@ -14,6 +14,8 @@
 #define APP_TARIFF_STATUS_TEXT_MAX_LEN 128
 #define APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN 192
 #define APP_TARIFF_UPDATED_TEXT_MAX_LEN 48
+#define APP_FIRMWARE_VERSION_TEXT_MAX_LEN 32
+#define APP_FIRMWARE_STATUS_TEXT_MAX_LEN 128
 #define APP_TARIFF_PREVIEW_MAX 3
 #define APP_TARIFF_DAY_SLOT_MAX 48
 
@@ -39,6 +41,17 @@ typedef enum {
     APP_TARIFF_STATUS_STALE,
     APP_TARIFF_STATUS_OFFLINE,
 } app_tariff_status_t;
+
+typedef enum {
+    APP_FIRMWARE_UPDATE_STATUS_IDLE = 0,
+    APP_FIRMWARE_UPDATE_STATUS_CHECKING,
+    APP_FIRMWARE_UPDATE_STATUS_UP_TO_DATE,
+    APP_FIRMWARE_UPDATE_STATUS_AVAILABLE,
+    APP_FIRMWARE_UPDATE_STATUS_DOWNLOADING,
+    APP_FIRMWARE_UPDATE_STATUS_APPLYING,
+    APP_FIRMWARE_UPDATE_STATUS_REBOOTING,
+    APP_FIRMWARE_UPDATE_STATUS_ERROR,
+} app_firmware_update_status_t;
 
 typedef struct {
     char ssid[APP_SETTINGS_WIFI_SSID_MAX_LEN + 1];
@@ -116,6 +129,14 @@ typedef struct {
     char startup_status_text[APP_TARIFF_STATUS_TEXT_MAX_LEN];
     app_tariff_day_view_t tariff_today;
     app_tariff_day_view_t tariff_tomorrow;
+    char firmware_current_version[APP_FIRMWARE_VERSION_TEXT_MAX_LEN];
+    uint32_t firmware_current_version_code;
+    char firmware_available_version[APP_FIRMWARE_VERSION_TEXT_MAX_LEN];
+    uint32_t firmware_available_version_code;
+    app_firmware_update_status_t firmware_update_status;
+    bool firmware_update_available;
+    uint8_t firmware_update_progress_percent;
+    char firmware_status_text[APP_FIRMWARE_STATUS_TEXT_MAX_LEN];
 } app_state_t;
 
 void app_state_init(app_state_t *state, const app_settings_t *settings);
@@ -162,8 +183,25 @@ void app_state_set_tariff_detail(
     const app_tariff_day_view_t *today,
     const app_tariff_day_view_t *tomorrow
 );
+void app_state_get_firmware_info(
+    const app_state_t *state,
+    char *current_version,
+    size_t current_version_size,
+    uint32_t *current_version_code
+);
+void app_state_set_firmware_info(app_state_t *state, const char *current_version, uint32_t current_version_code);
+void app_state_set_firmware_status(
+    app_state_t *state,
+    app_firmware_update_status_t status,
+    bool update_available,
+    const char *available_version,
+    uint32_t available_version_code,
+    uint8_t progress_percent,
+    const char *status_text
+);
 const char *app_state_get_screen_name(app_screen_t screen);
 const char *app_state_get_startup_stage_name(app_startup_stage_t stage);
 const char *app_state_get_wifi_status_name(app_wifi_status_t status);
 const char *app_state_get_time_status_name(app_time_status_t status);
 const char *app_state_get_tariff_status_name(app_tariff_status_t status);
+const char *app_state_get_firmware_update_status_name(app_firmware_update_status_t status);

@@ -12,6 +12,7 @@
 #include "app_state.h"
 #include "docs_screenshot.h"
 #include "lcd.h"
+#include "ota_manager.h"
 #include "sync_controller.h"
 #include "time_manager.h"
 #include "touch.h"
@@ -97,6 +98,8 @@ void app_main(void)
         app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_ONBOARDING, "Wi-Fi not configured. Open settings to begin onboarding.");
     }
 #endif
+
+    ESP_ERROR_CHECK(ota_manager_init(&s_app_state));
 
     ESP_ERROR_CHECK(lcd_backlight_init());
     ESP_ERROR_CHECK(lcd_init(&panel_io, &panel));

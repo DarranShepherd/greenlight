@@ -75,6 +75,8 @@ void app_state_init(app_state_t *state, const app_settings_t *settings)
         "Not refreshed yet"
     );
     app_state_set_tariff_primary(state, false, 0.0f, TARIFF_BAND_NORMAL, 0, 0, NULL, 0);
+    app_state_set_firmware_info(state, "dev", 0);
+    app_state_set_firmware_status(state, APP_FIRMWARE_UPDATE_STATUS_IDLE, false, "", 0, 0, "Open Settings to check for firmware updates");
 }
 
 void app_state_get_snapshot(const app_state_t *state, app_state_t *snapshot)
@@ -255,6 +257,59 @@ void app_state_set_tariff_snapshot(
     state_unlock();
 }
 
+void app_state_get_firmware_info(
+    const app_state_t *state,
+    char *current_version,
+    size_t current_version_size,
+    uint32_t *current_version_code
+)
+{
+    if (state == NULL) {
+        return;
+    }
+
+    state_lock();
+    if (current_version != NULL && current_version_size > 0) {
+        copy_text(current_version, current_version_size, state->firmware_current_version);
+    }
+    if (current_version_code != NULL) {
+        *current_version_code = state->firmware_current_version_code;
+    }
+    state_unlock();
+}
+
+void app_state_set_firmware_info(app_state_t *state, const char *current_version, uint32_t current_version_code)
+{
+    state_lock();
+    copy_text(state->firmware_current_version, sizeof(state->firmware_current_version), current_version);
+    state->firmware_current_version_code = current_version_code;
+    state_unlock();
+}
+
+void app_state_set_firmware_status(
+    app_state_t *state,
+    app_firmware_update_status_t status,
+    bool update_available,
+    const char *available_version,
+    uint32_t available_version_code,
+    uint8_t progress_percent,
+    const char *status_text
+)
+{
+    if (progress_percent > 100) {
+        progress_percent = 100;
+    }
+
+    state_lock();
+    state->firmware_update_status = status;
+    state->firmware_update_available = update_available;
+    copy_text(state->firmware_available_version, sizeof(state->firmware_available_version), available_version);
+    state->firmware_available_version_code = available_version_code;
+    state->firmware_update_progress_percent = progress_percent;
+    copy_text(state->firmware_status_text, sizeof(state->firmware_status_text), status_text);
+    state_unlock();
+}
+
 void app_state_set_tariff_primary(
     app_state_t *state,
     bool current_block_valid,
@@ -386,6 +441,30 @@ const char *app_state_get_tariff_status_name(app_tariff_status_t status)
             return "Stale";
         case APP_TARIFF_STATUS_OFFLINE:
             return "Offline";
+        default:
+            return "Unknown";
+    }
+}
+
+const char *app_state_get_firmware_update_status_name(app_firmware_update_status_t status)
+{
+    switch (status) {
+        case APP_FIRMWARE_UPDATE_STATUS_IDLE:
+            return "Idle";
+        case APP_FIRMWARE_UPDATE_STATUS_CHECKING:
+            return "Checking";
+        case APP_FIRMWARE_UPDATE_STATUS_UP_TO_DATE:
+            return "Up To Date";
+        case APP_FIRMWARE_UPDATE_STATUS_AVAILABLE:
+            return "Available";
+        case APP_FIRMWARE_UPDATE_STATUS_DOWNLOADING:
+            return "Downloading";
+        case APP_FIRMWARE_UPDATE_STATUS_APPLYING:
+            return "Applying";
+        case APP_FIRMWARE_UPDATE_STATUS_REBOOTING:
+            return "Rebooting";
+        case APP_FIRMWARE_UPDATE_STATUS_ERROR:
+            return "Error";
         default:
             return "Unknown";
     }

@@ -1,0 +1,73 @@
+name: OTA Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    name: Build And Publish OTA Artifacts
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v6.0
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install asset generation dependencies
+        shell: bash
+        run: |
+          apt-get update
+          apt-get install --yes nodejs npm python3-cairosvg python3-pil
+          npm install --global lv_font_conv
+
+      - name: Build firmware from tag
+        shell: bash
+        run: |
+          . /opt/esp/idf/export.sh
+          VERSION="${GITHUB_REF_NAME#v}"
+          python3 tools/generate_assets.py
+          idf.py -DPROJECT_VER="${VERSION}" build
+
+      - name: Generate OTA metadata
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p dist
+          cp build/greenlight.bin dist/firmware.bin
+          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION_CODE=$(python3 - <<'PY'
+import os
+
+version = os.environ["VERSION"]
+parts = version.split(".")
+parts += ["0"] * (3 - len(parts))
+major, minor, patch = [int(part) for part in parts[:3]]
+print(major * 10000 + minor * 100 + patch)
+PY
+)
+          SHA256=$(sha256sum dist/firmware.bin | awk '{print $1}')
+          cat > dist/metadata.json <<EOF
+          {
+            "version": "${VERSION}",
+            "version_code": ${VERSION_CODE},
+            "firmware_url": "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/firmware.bin",
+            "sha256": "${SHA256}"
+          }
+          EOF
+        env:
+          VERSION: ${{ github.ref_name }}
+
+      - name: Publish GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/firmware.bin
+            dist/metadata.json
+          overwrite_files: true

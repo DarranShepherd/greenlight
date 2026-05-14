@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "numeric_fonts.h"
+#include "ota_manager.h"
 #include "sync_controller.h"
 #include "touch.h"
 #include "wifi_manager.h"
@@ -486,6 +487,18 @@ static void wifi_keyboard_event_cb(lv_event_t *event)
     }
 }
 
+static void firmware_update_button_event_cb(lv_event_t *event)
+{
+    ui_router_view_t *view = (ui_router_view_t *)lv_event_get_user_data(event);
+
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || view == NULL) {
+        return;
+    }
+
+    ui_router_hide_keyboard(view);
+    (void)ota_manager_request_update();
+}
+
 static void touch_calibration_start_event_cb(lv_event_t *event)
 {
     app_settings_t settings = {0};
@@ -626,6 +639,55 @@ void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
             lv_label_set_text(view->local_time_label, "");
         } else {
             lv_label_set_text_fmt(view->local_time_label, "London %s", state->local_time_text);
+        }
+    }
+
+    if (view->firmware_version_label != NULL) {
+        lv_label_set_text_fmt(
+            view->firmware_version_label,
+            "Firmware Version: %s",
+            state->firmware_current_version[0] != '\0' ? state->firmware_current_version : "dev"
+        );
+    }
+
+    if (view->firmware_available_label != NULL) {
+        if (state->firmware_update_available && state->firmware_available_version[0] != '\0') {
+            lv_label_set_text_fmt(view->firmware_available_label, "New Version Available: %s", state->firmware_available_version);
+        } else {
+            lv_label_set_text(view->firmware_available_label, "");
+        }
+    }
+
+    if (view->firmware_status_label != NULL) {
+        lv_label_set_text_fmt(
+            view->firmware_status_label,
+            "Status: %s",
+            state->firmware_status_text[0] != '\0' ? state->firmware_status_text : app_state_get_firmware_update_status_name(state->firmware_update_status)
+        );
+    }
+
+    if (view->firmware_update_button != NULL) {
+        bool should_show_button = state->firmware_update_available ||
+                                  state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_DOWNLOADING ||
+                                  state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_APPLYING ||
+                                  state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_REBOOTING;
+
+        if (should_show_button) {
+            lv_obj_clear_flag(view->firmware_update_button, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(view->firmware_update_button, LV_OBJ_FLAG_HIDDEN);
+        }
+
+        if (state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_AVAILABLE) {
+            lv_obj_clear_state(view->firmware_update_button, LV_STATE_DISABLED);
+            if (view->firmware_update_button_label != NULL) {
+                lv_label_set_text(view->firmware_update_button_label, "Update Firmware");
+            }
+        } else {
+            lv_obj_add_state(view->firmware_update_button, LV_STATE_DISABLED);
+            if (view->firmware_update_button_label != NULL) {
+                lv_label_set_text(view->firmware_update_button_label, "Updating...");
+            }
         }
     }
 }
@@ -869,6 +931,39 @@ void ui_settings_create(lv_obj_t *screen, lv_obj_t *tile, ui_router_view_t *view
 
     view->local_time_label = lv_label_create(time_card);
     lv_obj_set_style_text_color(view->local_time_label, lv_color_hex(0x9ca3af), 0);
+
+    lv_obj_t *firmware_card = ui_router_create_section_card(view->settings_content, lv_color_hex(0x111827));
+    lv_obj_set_style_radius(firmware_card, 16, 0);
+    lv_obj_set_style_border_width(firmware_card, 1, 0);
+    lv_obj_set_style_border_color(firmware_card, lv_color_hex(0x1f2937), 0);
+    lv_obj_set_style_pad_all(firmware_card, 14, 0);
+    lv_obj_set_style_pad_row(firmware_card, 10, 0);
+
+    lv_obj_t *firmware_title = lv_label_create(firmware_card);
+    lv_label_set_text(firmware_title, "Firmware Updates");
+    lv_obj_set_style_text_color(firmware_title, lv_color_white(), 0);
+
+    view->firmware_version_label = lv_label_create(firmware_card);
+    lv_obj_set_width(view->firmware_version_label, lv_pct(100));
+    lv_label_set_long_mode(view->firmware_version_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_color(view->firmware_version_label, lv_color_hex(0xe5e7eb), 0);
+
+    view->firmware_available_label = lv_label_create(firmware_card);
+    lv_obj_set_width(view->firmware_available_label, lv_pct(100));
+    lv_label_set_long_mode(view->firmware_available_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_color(view->firmware_available_label, lv_color_hex(0x93c5fd), 0);
+
+    view->firmware_status_label = lv_label_create(firmware_card);
+    lv_obj_set_width(view->firmware_status_label, lv_pct(100));
+    lv_label_set_long_mode(view->firmware_status_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_color(view->firmware_status_label, lv_color_hex(0x9ca3af), 0);
+
+    view->firmware_update_button = ui_router_create_dark_button(firmware_card, "Update Firmware");
+    lv_obj_set_width(view->firmware_update_button, lv_pct(100));
+    lv_obj_set_style_bg_color(view->firmware_update_button, lv_color_hex(0x1d4ed8), 0);
+    lv_obj_add_event_cb(view->firmware_update_button, firmware_update_button_event_cb, LV_EVENT_CLICKED, view);
+    lv_obj_add_flag(view->firmware_update_button, LV_OBJ_FLAG_HIDDEN);
+    view->firmware_update_button_label = lv_obj_get_child(view->firmware_update_button, 0);
 
     view->wifi_keyboard = lv_keyboard_create(tile);
     lv_obj_set_width(view->wifi_keyboard, lv_pct(100));

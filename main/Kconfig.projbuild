@@ -1,5 +1,17 @@
 menu "Greenlight"
 
+config GREENLIGHT_GITHUB_OWNER
+    string "GitHub OTA owner"
+    default "DarranShepherd"
+    help
+        GitHub owner or organization for OTA release metadata and firmware assets.
+
+config GREENLIGHT_GITHUB_REPO
+    string "GitHub OTA repository"
+    default "greenlight"
+    help
+        GitHub repository name that publishes OTA firmware releases.
+
 config GREENLIGHT_DOCS_SCREENSHOT_MODE
     bool "Enable documentation screenshot firmware mode"
     default n

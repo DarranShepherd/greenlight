@@ -9,6 +9,8 @@ idf_component_register(
         "main.c"
         "octopus_client.c"
         "octopus_client_internal.c"
+        "ota_manager.c"
+        "ota_manager_internal.c"
         "splash_logo.c"
         "sync_controller.c"
         "tariff_model.c"
@@ -20,12 +22,15 @@ idf_component_register(
         "ui_settings.c"
         "wifi_manager.c"
     EMBED_TXTFILES
+        "../certs/github-ota-root-bundle.pem"
         "../certs/octopus-amazon-root-ca-1.pem"
     INCLUDE_DIRS
         "."
     REQUIRES
+        app_update
         esp_event
         esp_netif
+        esp_https_ota
         esp_driver_gpio
         esp_driver_ledc
         esp_driver_spi

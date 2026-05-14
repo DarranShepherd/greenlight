@@ -65,6 +65,11 @@ typedef struct {
     lv_obj_t *wifi_status_label;
     lv_obj_t *time_status_label;
     lv_obj_t *local_time_label;
+    lv_obj_t *firmware_version_label;
+    lv_obj_t *firmware_available_label;
+    lv_obj_t *firmware_status_label;
+    lv_obj_t *firmware_update_button;
+    lv_obj_t *firmware_update_button_label;
     lv_obj_t *wifi_dropdown;
     lv_obj_t *wifi_psk_textarea;
     lv_obj_t *wifi_keyboard;
@@ -79,6 +84,7 @@ typedef struct {
     char wifi_dropdown_cache[APP_WIFI_SCAN_MAX_RESULTS * (APP_SETTINGS_WIFI_SSID_MAX_LEN + 1) + 32];
     app_state_t *state;
     app_state_t state_snapshot;
+    app_screen_t last_active_screen;
 } ui_router_view_t;
 
 uint8_t ui_router_clamp_brightness_value(int32_t brightness_percent);

@@ -7,6 +7,7 @@
 
 #include "lcd.h"
 #include "numeric_fonts.h"
+#include "ota_manager.h"
 #include "splash_logo.h"
 #include "ui_router_internal.h"
 
@@ -236,6 +237,13 @@ static void sync_tile_locked(const app_state_t *state)
 
 static void apply_state_locked(const app_state_t *state)
 {
+    if (state->active_screen != s_view.last_active_screen) {
+        s_view.last_active_screen = state->active_screen;
+        if (state->active_screen == APP_SCREEN_SETTINGS) {
+            (void)ota_manager_request_check();
+        }
+    }
+
     if (s_view.startup_overlay != NULL) {
         if (state->startup_stage == APP_STARTUP_STAGE_COMPLETE) {
             lv_obj_add_flag(s_view.startup_overlay, LV_OBJ_FLAG_HIDDEN);
@@ -264,11 +272,13 @@ static void apply_state_locked(const app_state_t *state)
 
 esp_err_t ui_router_init(app_state_t *state)
 {
+    app_state_t initial_snapshot = {0};
+
     if (state == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    app_state_get_snapshot(state, &s_view.state_snapshot);
+    app_state_get_snapshot(state, &initial_snapshot);
 
     if (!lvgl_port_lock(0)) {
         return ESP_ERR_TIMEOUT;
@@ -276,6 +286,8 @@ esp_err_t ui_router_init(app_state_t *state)
 
     s_view = (ui_router_view_t){
         .state = state,
+        .state_snapshot = initial_snapshot,
+        .last_active_screen = APP_SCREEN_COUNT,
     };
 
     lv_obj_t *screen = lv_screen_active();

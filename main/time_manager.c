@@ -45,12 +45,12 @@ static void format_local_time(char *buffer, size_t buffer_size)
     localtime_r(&now, &local_time);
 
     if (!is_time_valid()) {
-        strlcpy(buffer, "Time unavailable", buffer_size);
+        buffer[0] = '\0';
         return;
     }
 
     if (strftime(buffer, buffer_size, "%a %d %b %H:%M", &local_time) == 0) {
-        strlcpy(buffer, "Time unavailable", buffer_size);
+        buffer[0] = '\0';
     }
 }
 
@@ -95,7 +95,7 @@ static void time_manager_task(void *arg)
             ESP_LOGI(TAG, "Time synchronized in %s", TIME_MANAGER_TZ_LABEL);
         } else {
             app_state_set_time_status(s_state, APP_TIME_STATUS_ERROR, false, "Time sync timed out");
-            app_state_set_local_time_text(s_state, "Time unavailable");
+            app_state_set_local_time_text(s_state, "");
             ESP_LOGW(TAG, "Timed out waiting for SNTP time sync");
         }
 

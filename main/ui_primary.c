@@ -352,9 +352,13 @@ void ui_primary_update(const app_state_t *state, ui_router_view_t *view)
         lv_label_set_text(view->primary_title_label, "Current Price");
     }
 
-    if (view->primary_wifi_label != NULL) {
-        lv_label_set_text(view->primary_wifi_label, state->wifi_status == APP_WIFI_STATUS_CONNECTED ? LV_SYMBOL_WIFI : "");
-    }
+    ui_router_update_wifi_status(
+        view->primary_wifi_label,
+        view->primary_wifi_strike,
+        state->wifi_status,
+        lv_color_white(),
+        lv_color_hex(0xdc2626)
+    );
 
     if (view->primary_hero_card != NULL) {
         lv_obj_set_style_bg_color(view->primary_hero_card, palette.hero_bg, 0);
@@ -469,10 +473,7 @@ void ui_primary_create(lv_obj_t *tile, ui_router_view_t *view)
     lv_obj_set_style_text_align(view->primary_title_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(view->primary_title_label, lv_color_white(), 0);
 
-    view->primary_wifi_label = lv_label_create(view->primary_top_bar);
-    lv_obj_set_width(view->primary_wifi_label, 52);
-    lv_obj_set_style_text_align(view->primary_wifi_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_style_text_color(view->primary_wifi_label, lv_color_white(), 0);
+    ui_router_create_wifi_status(view->primary_top_bar, &view->primary_wifi_label, &view->primary_wifi_strike);
 
     view->primary_hero_card = lv_obj_create(tile);
     lv_obj_set_width(view->primary_hero_card, lv_pct(100));

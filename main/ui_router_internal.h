@@ -22,6 +22,7 @@ typedef struct {
     lv_obj_t *primary_clock_label;
     lv_obj_t *primary_title_label;
     lv_obj_t *primary_wifi_label;
+    lv_obj_t *primary_wifi_strike;
     lv_obj_t *primary_hero_card;
     lv_obj_t *primary_band_chip;
     lv_obj_t *primary_band_label;
@@ -42,6 +43,7 @@ typedef struct {
     lv_obj_t *detail_clock_label;
     lv_obj_t *detail_title_label;
     lv_obj_t *detail_wifi_label;
+    lv_obj_t *detail_wifi_strike;
     lv_obj_t *detail_day_panels[2];
     lv_obj_t *detail_day_titles[2];
     lv_obj_t *detail_day_bar_rows[2];
@@ -84,6 +86,14 @@ void ui_router_apply_brightness(ui_router_view_t *view, uint8_t brightness_perce
 void ui_router_format_clock_label(char *buffer, size_t buffer_size, const char *local_time_text);
 lv_obj_t *ui_router_create_section_card(lv_obj_t *parent, lv_color_t bg_color);
 lv_obj_t *ui_router_create_dark_button(lv_obj_t *parent, const char *label_text);
+void ui_router_create_wifi_status(lv_obj_t *parent, lv_obj_t **wifi_label, lv_obj_t **wifi_strike);
+void ui_router_update_wifi_status(
+    lv_obj_t *wifi_label,
+    lv_obj_t *wifi_strike,
+    app_wifi_status_t wifi_status,
+    lv_color_t connected_color,
+    lv_color_t disconnected_color
+);
 void ui_router_set_keyboard_target(ui_router_view_t *view, lv_obj_t *textarea);
 void ui_router_hide_keyboard(ui_router_view_t *view);
 

@@ -24,6 +24,10 @@ static const char *KEY_TOUCH_Y_OFFSET = "touch_yoff";
 
 static uint8_t clamp_brightness(uint8_t brightness_percent)
 {
+    if (brightness_percent < APP_SETTINGS_MIN_BRIGHTNESS_PERCENT) {
+        return APP_SETTINGS_MIN_BRIGHTNESS_PERCENT;
+    }
+
     if (brightness_percent > 100) {
         return APP_SETTINGS_DEFAULT_BRIGHTNESS_PERCENT;
     }

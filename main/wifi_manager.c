@@ -236,7 +236,7 @@ static esp_err_t execute_connect(const char *ssid, const char *psk)
     app_state_set_wifi_connection(s_state, ssid, "");
     set_status_with_ssid(APP_WIFI_STATUS_CONNECTING, "Connecting to", ssid);
     app_state_set_time_status(s_state, APP_TIME_STATUS_IDLE, false, "Waiting for Wi-Fi before time sync");
-    app_state_set_local_time_text(s_state, "Time unavailable");
+    app_state_set_local_time_text(s_state, "");
 
     (void)esp_wifi_disconnect();
     ret = esp_wifi_set_config(WIFI_IF_STA, &config);

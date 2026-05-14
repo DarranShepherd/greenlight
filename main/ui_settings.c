@@ -587,22 +587,13 @@ void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
         lv_label_set_text(view->settings_title_label, "Settings");
     }
 
-    if (view->settings_wifi_label != NULL) {
-        lv_label_set_text(view->settings_wifi_label, LV_SYMBOL_WIFI);
-        lv_obj_set_style_text_color(
-            view->settings_wifi_label,
-            state->wifi_status == APP_WIFI_STATUS_CONNECTED ? lv_color_white() : lv_color_hex(0x9ca3af),
-            0
-        );
-    }
-
-    if (view->settings_wifi_strike_label != NULL) {
-        if (state->wifi_status == APP_WIFI_STATUS_CONNECTED) {
-            lv_obj_add_flag(view->settings_wifi_strike_label, LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_obj_clear_flag(view->settings_wifi_strike_label, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
+    ui_router_update_wifi_status(
+        view->settings_wifi_label,
+        view->settings_wifi_strike_label,
+        state->wifi_status,
+        lv_color_white(),
+        lv_color_hex(0xdc2626)
+    );
 
     update_region_label(state, view);
     update_touch_calibration_status(state, view);
@@ -631,7 +622,11 @@ void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
     }
 
     if (view->local_time_label != NULL) {
-        lv_label_set_text_fmt(view->local_time_label, "London %s", state->local_time_text);
+        if (state->local_time_text[0] == '\0') {
+            lv_label_set_text(view->local_time_label, "");
+        } else {
+            lv_label_set_text_fmt(view->local_time_label, "London %s", state->local_time_text);
+        }
     }
 }
 
@@ -665,21 +660,7 @@ void ui_settings_create(lv_obj_t *screen, lv_obj_t *tile, ui_router_view_t *view
     lv_obj_set_style_text_align(view->settings_title_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(view->settings_title_label, lv_color_white(), 0);
 
-    lv_obj_t *wifi_slot = lv_obj_create(view->settings_top_bar);
-    lv_obj_set_size(wifi_slot, 52, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(wifi_slot, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(wifi_slot, 0, 0);
-    lv_obj_set_style_pad_all(wifi_slot, 0, 0);
-    lv_obj_remove_flag(wifi_slot, LV_OBJ_FLAG_SCROLLABLE);
-
-    view->settings_wifi_label = lv_label_create(wifi_slot);
-    lv_label_set_text(view->settings_wifi_label, LV_SYMBOL_WIFI);
-    lv_obj_align(view->settings_wifi_label, LV_ALIGN_RIGHT_MID, 0, 0);
-
-    view->settings_wifi_strike_label = lv_label_create(wifi_slot);
-    lv_label_set_text(view->settings_wifi_strike_label, "/");
-    lv_obj_set_style_text_color(view->settings_wifi_strike_label, lv_color_hex(0xf87171), 0);
-    lv_obj_align(view->settings_wifi_strike_label, LV_ALIGN_RIGHT_MID, -2, 0);
+    ui_router_create_wifi_status(view->settings_top_bar, &view->settings_wifi_label, &view->settings_wifi_strike_label);
 
     view->settings_content = lv_obj_create(tile);
     lv_obj_set_width(view->settings_content, lv_pct(100));

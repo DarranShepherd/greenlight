@@ -159,9 +159,13 @@ void ui_detail_update(const app_state_t *state, ui_router_view_t *view)
         lv_label_set_text(view->detail_title_label, "Daily Prices");
     }
 
-    if (view->detail_wifi_label != NULL) {
-        lv_label_set_text(view->detail_wifi_label, state->wifi_status == APP_WIFI_STATUS_CONNECTED ? LV_SYMBOL_WIFI : "");
-    }
+    ui_router_update_wifi_status(
+        view->detail_wifi_label,
+        view->detail_wifi_strike,
+        state->wifi_status,
+        lv_color_white(),
+        lv_color_hex(0xdc2626)
+    );
 
     if (view->detail_status_label != NULL) {
         lv_label_set_text(view->detail_status_label, state->tariff_status_text);
@@ -206,10 +210,7 @@ void ui_detail_create(lv_obj_t *tile, ui_router_view_t *view)
     lv_obj_set_style_text_align(view->detail_title_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(view->detail_title_label, lv_color_white(), 0);
 
-    view->detail_wifi_label = lv_label_create(view->detail_top_bar);
-    lv_obj_set_width(view->detail_wifi_label, 52);
-    lv_obj_set_style_text_align(view->detail_wifi_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_style_text_color(view->detail_wifi_label, lv_color_white(), 0);
+    ui_router_create_wifi_status(view->detail_top_bar, &view->detail_wifi_label, &view->detail_wifi_strike);
 
     view->detail_status_label = lv_label_create(tile);
     lv_obj_set_width(view->detail_status_label, lv_pct(100));

@@ -65,7 +65,7 @@ void app_state_init(app_state_t *state, const app_settings_t *settings)
     state->wifi_has_saved_credentials = settings->wifi_ssid[0] != '\0';
     app_state_set_wifi_status(state, APP_WIFI_STATUS_IDLE, state->wifi_has_saved_credentials ? "Saved Wi-Fi ready" : "Enter Wi-Fi credentials to get started");
     app_state_set_time_status(state, APP_TIME_STATUS_IDLE, false, "Waiting for Wi-Fi before time sync");
-    app_state_set_local_time_text(state, "Time unavailable");
+    app_state_set_local_time_text(state, "");
     app_state_set_tariff_status(state, APP_TARIFF_STATUS_IDLE, false, false, "Waiting for valid local time before tariff fetch");
     app_state_set_tariff_snapshot(
         state,
@@ -143,7 +143,9 @@ void app_state_set_startup_stage(app_state_t *state, app_startup_stage_t stage, 
 
 void app_state_set_brightness(app_state_t *state, uint8_t brightness_percent)
 {
-    if (brightness_percent > 100) {
+    if (brightness_percent < APP_SETTINGS_MIN_BRIGHTNESS_PERCENT) {
+        brightness_percent = APP_SETTINGS_MIN_BRIGHTNESS_PERCENT;
+    } else if (brightness_percent > 100) {
         brightness_percent = APP_SETTINGS_DEFAULT_BRIGHTNESS_PERCENT;
     }
 

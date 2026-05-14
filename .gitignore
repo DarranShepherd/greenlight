@@ -1,4 +1,5 @@
 build/
+.host-test-bin/
 backups/
 managed_components/
 sdkconfig

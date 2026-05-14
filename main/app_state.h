@@ -119,6 +119,10 @@ typedef struct {
 } app_state_t;
 
 void app_state_init(app_state_t *state, const app_settings_t *settings);
+void app_state_get_snapshot(const app_state_t *state, app_state_t *snapshot);
+void app_state_get_settings(const app_state_t *state, app_settings_t *settings);
+void app_state_set_settings(app_state_t *state, const app_settings_t *settings);
+bool app_state_get_time_valid(const app_state_t *state);
 void app_state_set_active_screen(app_state_t *state, app_screen_t screen);
 void app_state_set_startup_stage(app_state_t *state, app_startup_stage_t stage, const char *status_text);
 void app_state_set_brightness(app_state_t *state, uint8_t brightness_percent);

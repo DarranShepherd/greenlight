@@ -47,7 +47,6 @@ static bool s_connect_in_progress;
 static uint8_t s_retry_count;
 static wifi_err_reason_t s_last_disconnect_reason;
 static char s_target_ssid[APP_SETTINGS_WIFI_SSID_MAX_LEN + 1];
-static char s_target_psk[APP_SETTINGS_WIFI_PSK_MAX_LEN + 1];
 
 static void wifi_manager_task(void *arg);
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
@@ -104,6 +103,19 @@ static void copy_text(char *destination, size_t destination_size, const char *so
     strlcpy(destination, source, destination_size);
 }
 
+static void clear_sensitive_text(char *buffer, size_t buffer_size)
+{
+    volatile char *volatile_buffer = (volatile char *)buffer;
+
+    if (buffer == NULL) {
+        return;
+    }
+
+    while (buffer_size-- > 0) {
+        *volatile_buffer++ = '\0';
+    }
+}
+
 static void set_status_with_ssid(app_wifi_status_t status, const char *prefix, const char *ssid)
 {
     char message[APP_WIFI_STATUS_TEXT_MAX_LEN] = {0};
@@ -119,22 +131,31 @@ static void set_status_with_ssid(app_wifi_status_t status, const char *prefix, c
 
 static void persist_connected_settings(const char *ssid, const char *psk)
 {
-    copy_text(s_state->settings.wifi_ssid, sizeof(s_state->settings.wifi_ssid), ssid);
-    copy_text(s_state->settings.wifi_psk, sizeof(s_state->settings.wifi_psk), psk);
+    app_settings_t settings = {0};
+
+    app_state_get_settings(s_state, &settings);
+    copy_text(settings.wifi_ssid, sizeof(settings.wifi_ssid), ssid);
+    copy_text(settings.wifi_psk, sizeof(settings.wifi_psk), psk);
     app_state_set_wifi_saved_credentials(s_state, ssid != NULL && ssid[0] != '\0');
 
-    esp_err_t err = app_settings_save(&s_state->settings);
+    esp_err_t err = app_settings_save(&settings);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to persist Wi-Fi credentials: %s", esp_err_to_name(err));
+        return;
     }
+
+    app_state_set_settings(s_state, &settings);
 }
 
 static void finish_scan_status(uint8_t result_count)
 {
+    app_state_t snapshot = {0};
     char message[APP_WIFI_STATUS_TEXT_MAX_LEN] = {0};
 
+    app_state_get_snapshot(s_state, &snapshot);
+
     if (s_is_connected) {
-        snprintf(message, sizeof(message), "Connected to %s", s_state->wifi_connected_ssid);
+        snprintf(message, sizeof(message), "Connected to %s", snapshot.wifi_connected_ssid);
         app_state_set_wifi_status(s_state, APP_WIFI_STATUS_CONNECTED, message);
         return;
     }
@@ -184,6 +205,7 @@ static esp_err_t execute_connect(const char *ssid, const char *psk)
     EventBits_t bits = 0;
     wifi_config_t config = {0};
     const wifi_ap_record_t *selected_ap = NULL;
+    esp_err_t ret = ESP_OK;
 
     if (ssid == NULL || ssid[0] == '\0') {
         app_state_set_active_screen(s_state, APP_SCREEN_SETTINGS);
@@ -205,7 +227,6 @@ static esp_err_t execute_connect(const char *ssid, const char *psk)
     }
 
     copy_text(s_target_ssid, sizeof(s_target_ssid), ssid);
-    copy_text(s_target_psk, sizeof(s_target_psk), psk);
 
     s_retry_count = 0;
     s_connect_in_progress = true;
@@ -220,8 +241,15 @@ static esp_err_t execute_connect(const char *ssid, const char *psk)
     app_state_set_local_time_text(s_state, "Time unavailable");
 
     (void)esp_wifi_disconnect();
-    ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_STA, &config), TAG, "apply station config");
-    ESP_RETURN_ON_ERROR(esp_wifi_connect(), TAG, "start Wi-Fi connect");
+    ret = esp_wifi_set_config(WIFI_IF_STA, &config);
+    if (ret != ESP_OK) {
+        goto cleanup;
+    }
+
+    ret = esp_wifi_connect();
+    if (ret != ESP_OK) {
+        goto cleanup;
+    }
 
     bits = xEventGroupWaitBits(
         s_event_group,
@@ -235,16 +263,22 @@ static esp_err_t execute_connect(const char *ssid, const char *psk)
 
     if ((bits & WIFI_MANAGER_CONNECTED_BIT) != 0) {
         persist_connected_settings(ssid, psk);
-        return ESP_OK;
+        ret = ESP_OK;
+        goto cleanup;
     }
 
     if ((bits & WIFI_MANAGER_FAILED_BIT) != 0) {
-        return ESP_FAIL;
+        ret = ESP_FAIL;
+        goto cleanup;
     }
 
     app_state_set_active_screen(s_state, APP_SCREEN_SETTINGS);
     app_state_set_wifi_status(s_state, APP_WIFI_STATUS_FAILED, "Wi-Fi connection timed out after 45s");
-    return ESP_ERR_TIMEOUT;
+    ret = ESP_ERR_TIMEOUT;
+
+cleanup:
+    clear_sensitive_text((char *)config.sta.password, sizeof(config.sta.password));
+    return ret;
 }
 
 static void wifi_manager_task(void *arg)
@@ -269,6 +303,7 @@ static void wifi_manager_task(void *arg)
                 if (execute_connect(command.ssid, command.psk) != ESP_OK && !s_connect_in_progress) {
                     app_state_set_active_screen(s_state, APP_SCREEN_SETTINGS);
                 }
+                clear_sensitive_text(command.psk, sizeof(command.psk));
                 break;
 
             default:
@@ -399,13 +434,16 @@ esp_err_t wifi_manager_request_connect(const char *ssid, const char *psk)
     wifi_manager_command_t command = {
         .type = WIFI_MANAGER_COMMAND_CONNECT,
     };
+    esp_err_t ret = ESP_OK;
 
     ESP_RETURN_ON_FALSE(s_command_queue != NULL, ESP_ERR_INVALID_STATE, TAG, "Wi-Fi manager not initialized");
 
     copy_text(command.ssid, sizeof(command.ssid), ssid);
     copy_text(command.psk, sizeof(command.psk), psk);
 
-    return xQueueSend(s_command_queue, &command, 0) == pdTRUE ? ESP_OK : ESP_ERR_TIMEOUT;
+    ret = xQueueSend(s_command_queue, &command, 0) == pdTRUE ? ESP_OK : ESP_ERR_TIMEOUT;
+    clear_sensitive_text(command.psk, sizeof(command.psk));
+    return ret;
 }
 
 bool wifi_manager_is_connected(void)

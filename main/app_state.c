@@ -2,6 +2,40 @@
 
 #include <string.h>
 
+#if __has_include(<freertos/FreeRTOS.h>)
+#include <freertos/FreeRTOS.h>
+#endif
+
+#if __has_include(<freertos/semphr.h>)
+#include <freertos/semphr.h>
+#define APP_STATE_HAS_MUTEX 1
+#else
+#define APP_STATE_HAS_MUTEX 0
+#endif
+
+#if APP_STATE_HAS_MUTEX
+static StaticSemaphore_t s_state_mutex_buffer;
+static SemaphoreHandle_t s_state_mutex;
+#endif
+
+static void state_lock(void)
+{
+#if APP_STATE_HAS_MUTEX
+    if (s_state_mutex != NULL) {
+        (void)xSemaphoreTake(s_state_mutex, portMAX_DELAY);
+    }
+#endif
+}
+
+static void state_unlock(void)
+{
+#if APP_STATE_HAS_MUTEX
+    if (s_state_mutex != NULL) {
+        (void)xSemaphoreGive(s_state_mutex);
+    }
+#endif
+}
+
 static void copy_text(char *destination, size_t destination_size, const char *source)
 {
     if (destination_size == 0) {
@@ -18,6 +52,12 @@ static void copy_text(char *destination, size_t destination_size, const char *so
 
 void app_state_init(app_state_t *state, const app_settings_t *settings)
 {
+#if APP_STATE_HAS_MUTEX
+    if (s_state_mutex == NULL) {
+        s_state_mutex = xSemaphoreCreateMutexStatic(&s_state_mutex_buffer);
+    }
+#endif
+
     memset(state, 0, sizeof(*state));
     state->settings = *settings;
     state->active_screen = APP_SCREEN_PRIMARY;
@@ -37,17 +77,68 @@ void app_state_init(app_state_t *state, const app_settings_t *settings)
     app_state_set_tariff_primary(state, false, 0.0f, TARIFF_BAND_NORMAL, 0, 0, NULL, 0);
 }
 
+void app_state_get_snapshot(const app_state_t *state, app_state_t *snapshot)
+{
+    if (state == NULL || snapshot == NULL) {
+        return;
+    }
+
+    state_lock();
+    *snapshot = *state;
+    state_unlock();
+}
+
+void app_state_get_settings(const app_state_t *state, app_settings_t *settings)
+{
+    if (state == NULL || settings == NULL) {
+        return;
+    }
+
+    state_lock();
+    *settings = state->settings;
+    state_unlock();
+}
+
+void app_state_set_settings(app_state_t *state, const app_settings_t *settings)
+{
+    if (state == NULL || settings == NULL) {
+        return;
+    }
+
+    state_lock();
+    state->settings = *settings;
+    state_unlock();
+}
+
+bool app_state_get_time_valid(const app_state_t *state)
+{
+    bool time_valid = false;
+
+    if (state == NULL) {
+        return false;
+    }
+
+    state_lock();
+    time_valid = state->time_valid;
+    state_unlock();
+    return time_valid;
+}
+
 void app_state_set_active_screen(app_state_t *state, app_screen_t screen)
 {
+    state_lock();
     if (screen < APP_SCREEN_COUNT) {
         state->active_screen = screen;
     }
+    state_unlock();
 }
 
 void app_state_set_startup_stage(app_state_t *state, app_startup_stage_t stage, const char *status_text)
 {
+    state_lock();
     state->startup_stage = stage;
     copy_text(state->startup_status_text, sizeof(state->startup_status_text), status_text);
+    state_unlock();
 }
 
 void app_state_set_brightness(app_state_t *state, uint8_t brightness_percent)
@@ -56,33 +147,43 @@ void app_state_set_brightness(app_state_t *state, uint8_t brightness_percent)
         brightness_percent = APP_SETTINGS_DEFAULT_BRIGHTNESS_PERCENT;
     }
 
+    state_lock();
     state->settings.brightness_percent = brightness_percent;
+    state_unlock();
 }
 
 void app_state_set_uptime(app_state_t *state, uint32_t uptime_seconds)
 {
+    state_lock();
     state->uptime_seconds = uptime_seconds;
+    state_unlock();
 }
 
 void app_state_set_wifi_saved_credentials(app_state_t *state, bool has_saved_credentials)
 {
+    state_lock();
     state->wifi_has_saved_credentials = has_saved_credentials;
+    state_unlock();
 }
 
 void app_state_set_wifi_status(app_state_t *state, app_wifi_status_t status, const char *status_text)
 {
+    state_lock();
     state->wifi_status = status;
     copy_text(state->wifi_status_text, sizeof(state->wifi_status_text), status_text);
 
     if (status != APP_WIFI_STATUS_CONNECTED) {
         state->wifi_ip_address[0] = '\0';
     }
+    state_unlock();
 }
 
 void app_state_set_wifi_connection(app_state_t *state, const char *ssid, const char *ip_address)
 {
+    state_lock();
     copy_text(state->wifi_connected_ssid, sizeof(state->wifi_connected_ssid), ssid);
     copy_text(state->wifi_ip_address, sizeof(state->wifi_ip_address), ip_address);
+    state_unlock();
 }
 
 void app_state_set_wifi_scan_results(app_state_t *state, const app_wifi_network_t *results, uint8_t result_count)
@@ -91,6 +192,7 @@ void app_state_set_wifi_scan_results(app_state_t *state, const app_wifi_network_
         result_count = APP_WIFI_SCAN_MAX_RESULTS;
     }
 
+    state_lock();
     if (result_count > 0 && results != NULL) {
         memcpy(state->wifi_scan_results, results, sizeof(state->wifi_scan_results[0]) * result_count);
     }
@@ -100,18 +202,23 @@ void app_state_set_wifi_scan_results(app_state_t *state, const app_wifi_network_
     }
 
     state->wifi_scan_result_count = result_count;
+    state_unlock();
 }
 
 void app_state_set_time_status(app_state_t *state, app_time_status_t status, bool time_valid, const char *status_text)
 {
+    state_lock();
     state->time_status = status;
     state->time_valid = time_valid;
     copy_text(state->time_status_text, sizeof(state->time_status_text), status_text);
+    state_unlock();
 }
 
 void app_state_set_local_time_text(app_state_t *state, const char *local_time_text)
 {
+    state_lock();
     copy_text(state->local_time_text, sizeof(state->local_time_text), local_time_text);
+    state_unlock();
 }
 
 void app_state_set_tariff_status(
@@ -122,10 +229,12 @@ void app_state_set_tariff_status(
     const char *status_text
 )
 {
+    state_lock();
     state->tariff_status = status;
     state->tariff_has_data = has_data;
     state->tariff_tomorrow_available = tomorrow_available;
     copy_text(state->tariff_status_text, sizeof(state->tariff_status_text), status_text);
+    state_unlock();
 }
 
 void app_state_set_tariff_snapshot(
@@ -136,10 +245,12 @@ void app_state_set_tariff_snapshot(
     const char *updated_text
 )
 {
+    state_lock();
     copy_text(state->tariff_current_text, sizeof(state->tariff_current_text), current_text);
     copy_text(state->tariff_next_text, sizeof(state->tariff_next_text), next_text);
     copy_text(state->tariff_detail_text, sizeof(state->tariff_detail_text), detail_text);
     copy_text(state->tariff_updated_text, sizeof(state->tariff_updated_text), updated_text);
+    state_unlock();
 }
 
 void app_state_set_tariff_primary(
@@ -153,6 +264,7 @@ void app_state_set_tariff_primary(
     uint8_t preview_count
 )
 {
+    state_lock();
     state->tariff_current_block_valid = current_block_valid;
     state->tariff_current_price = current_price;
     state->tariff_current_band = current_band;
@@ -172,6 +284,7 @@ void app_state_set_tariff_primary(
     }
 
     state->tariff_preview_count = preview_count;
+    state_unlock();
 }
 
 void app_state_set_tariff_detail(
@@ -180,6 +293,7 @@ void app_state_set_tariff_detail(
     const app_tariff_day_view_t *tomorrow
 )
 {
+    state_lock();
     if (today != NULL) {
         state->tariff_today = *today;
     } else {
@@ -191,6 +305,7 @@ void app_state_set_tariff_detail(
     } else {
         memset(&state->tariff_tomorrow, 0, sizeof(state->tariff_tomorrow));
     }
+    state_unlock();
 }
 
 const char *app_state_get_screen_name(app_screen_t screen)

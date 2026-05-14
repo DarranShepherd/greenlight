@@ -21,6 +21,12 @@ typedef struct {
     int32_t y_offset;
 } app_touch_calibration_t;
 
+/*
+ * Wi-Fi credentials are persisted in the device's NVS settings namespace so the
+ * station can reconnect after reboot. On ESP32 this is practical but not a hard
+ * secret store, so the UI intentionally does not repopulate the saved PSK even
+ * though the runtime still loads it for reconnect.
+ */
 typedef struct {
     char wifi_ssid[APP_SETTINGS_WIFI_SSID_MAX_LEN + 1];
     char wifi_psk[APP_SETTINGS_WIFI_PSK_MAX_LEN + 1];

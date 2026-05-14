@@ -1,0 +1,38 @@
+name: Validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  firmware-build:
+    name: Firmware Build
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v6.0
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build ESP-IDF firmware
+        shell: bash
+        run: |
+          . /opt/esp/idf/export.sh
+          idf.py -B build-ci reconfigure build
+
+  host-tests:
+    name: Host Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install host test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential libcjson-dev
+
+      - name: Run host-side logic tests
+        run: sh tools/run_host_tests.sh

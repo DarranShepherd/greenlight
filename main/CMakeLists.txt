@@ -23,6 +23,7 @@ idf_component_register(
         esp_http_client
         esp_wifi
         freertos
+        cjson
         lwip
         mbedtls
         nvs_flash

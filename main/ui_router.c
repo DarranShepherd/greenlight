@@ -80,10 +80,10 @@ typedef struct {
     lv_obj_t *touch_calibration_target;
     lv_point_t touch_calibration_samples[TOUCH_CALIBRATION_POINT_COUNT];
     app_touch_calibration_t previous_touch_calibration;
-    bool wifi_psk_seeded_from_settings;
     uint8_t touch_calibration_step;
     char wifi_dropdown_cache[APP_WIFI_SCAN_MAX_RESULTS * (APP_SETTINGS_WIFI_SSID_MAX_LEN + 1) + 32];
     app_state_t *state;
+    app_state_t state_snapshot;
 } ui_router_view_t;
 
 static ui_router_view_t s_view;
@@ -155,6 +155,26 @@ static uint8_t clamp_brightness_value(int32_t brightness_percent)
     }
 
     return (uint8_t)brightness_percent;
+}
+
+static bool copy_view_state_snapshot(app_state_t *snapshot)
+{
+    if (s_view.state == NULL || snapshot == NULL) {
+        return false;
+    }
+
+    app_state_get_snapshot(s_view.state, snapshot);
+    return true;
+}
+
+static bool copy_view_settings(app_settings_t *settings)
+{
+    if (s_view.state == NULL || settings == NULL) {
+        return false;
+    }
+
+    app_state_get_settings(s_view.state, settings);
+    return true;
 }
 
 static void apply_brightness_locked(uint8_t brightness_percent)
@@ -775,16 +795,21 @@ static void update_region_label_locked(const app_state_t *state)
 
 static void apply_region_index_locked(size_t region_index)
 {
+    app_settings_t current_settings = {0};
     app_settings_t next_settings = {0};
 
     if (s_view.state == NULL || region_index >= (sizeof(s_region_options) / sizeof(s_region_options[0]))) {
         return;
     }
 
-    next_settings = s_view.state->settings;
+    if (!copy_view_settings(&current_settings)) {
+        return;
+    }
+
+    next_settings = current_settings;
     snprintf(next_settings.region_code, sizeof(next_settings.region_code), "%c", s_region_options[region_index].code);
 
-    if (strcmp(next_settings.region_code, s_view.state->settings.region_code) == 0) {
+    if (strcmp(next_settings.region_code, current_settings.region_code) == 0) {
         return;
     }
 
@@ -792,8 +817,10 @@ static void apply_region_index_locked(size_t region_index)
         return;
     }
 
-    s_view.state->settings = next_settings;
-    update_region_label_locked(s_view.state);
+    app_state_set_settings(s_view.state, &next_settings);
+    if (s_view.region_label != NULL) {
+        lv_label_set_text_fmt(s_view.region_label, "%s  %s", next_settings.region_code, get_region_name(next_settings.region_code));
+    }
     sync_controller_request_refresh();
 }
 
@@ -963,17 +990,24 @@ static void tileview_event_cb(lv_event_t *event)
 
 static void brightness_button_event_cb(lv_event_t *event)
 {
+    app_settings_t settings = {0};
+
     if (lv_event_get_code(event) != LV_EVENT_CLICKED) {
         return;
     }
 
+    if (!copy_view_settings(&settings)) {
+        return;
+    }
+
     int32_t delta = (int32_t)(intptr_t)lv_event_get_user_data(event);
-    uint8_t next_brightness = clamp_brightness_value((int32_t)s_view.state->settings.brightness_percent + delta);
+    uint8_t next_brightness = clamp_brightness_value((int32_t)settings.brightness_percent + delta);
     apply_brightness_locked(next_brightness);
 }
 
 static void region_button_event_cb(lv_event_t *event)
 {
+    app_settings_t settings = {0};
     int32_t delta = 0;
     size_t region_count = sizeof(s_region_options) / sizeof(s_region_options[0]);
     size_t current_index = 0;
@@ -983,8 +1017,12 @@ static void region_button_event_cb(lv_event_t *event)
         return;
     }
 
+    if (!copy_view_settings(&settings)) {
+        return;
+    }
+
     delta = (int32_t)(intptr_t)lv_event_get_user_data(event);
-    current_index = get_region_option_index(s_view.state->settings.region_code);
+    current_index = get_region_option_index(settings.region_code);
     next_index = (current_index + region_count + (size_t)delta) % region_count;
     apply_region_index_locked(next_index);
 }
@@ -1000,6 +1038,7 @@ static void wifi_scan_button_event_cb(lv_event_t *event)
 
 static void wifi_connect_button_event_cb(lv_event_t *event)
 {
+    app_state_t snapshot = {0};
     const char *psk = NULL;
     char selected_ssid[APP_SETTINGS_WIFI_SSID_MAX_LEN + 1] = {0};
     const char *ssid = NULL;
@@ -1008,13 +1047,17 @@ static void wifi_connect_button_event_cb(lv_event_t *event)
         return;
     }
 
+    if (!copy_view_state_snapshot(&snapshot)) {
+        return;
+    }
+
     psk = lv_textarea_get_text(s_view.wifi_psk_textarea);
 
-    if (s_view.state->wifi_scan_result_count > 0) {
+    if (snapshot.wifi_scan_result_count > 0) {
         lv_dropdown_get_selected_str(s_view.wifi_dropdown, selected_ssid, sizeof(selected_ssid));
         ssid = selected_ssid;
-    } else if (s_view.state->settings.wifi_ssid[0] != '\0') {
-        ssid = s_view.state->settings.wifi_ssid;
+    } else if (snapshot.settings.wifi_ssid[0] != '\0') {
+        ssid = snapshot.settings.wifi_ssid;
     }
 
     hide_keyboard();
@@ -1049,12 +1092,18 @@ static void wifi_keyboard_event_cb(lv_event_t *event)
 
 static void touch_calibration_start_event_cb(lv_event_t *event)
 {
+    app_settings_t settings = {0};
+
     if (lv_event_get_code(event) != LV_EVENT_CLICKED || s_view.touch_calibration_overlay == NULL) {
         return;
     }
 
+    if (!copy_view_settings(&settings)) {
+        return;
+    }
+
     hide_keyboard();
-    s_view.previous_touch_calibration = s_view.state->settings.touch_calibration;
+    s_view.previous_touch_calibration = settings.touch_calibration;
     touch_set_calibration(NULL);
     s_view.touch_calibration_step = 0;
     memset(s_view.touch_calibration_samples, 0, sizeof(s_view.touch_calibration_samples));
@@ -1065,6 +1114,7 @@ static void touch_calibration_start_event_cb(lv_event_t *event)
 
 static void touch_calibration_overlay_event_cb(lv_event_t *event)
 {
+    app_settings_t settings = {0};
     lv_indev_t *indev = NULL;
     lv_point_t point = {0};
     app_touch_calibration_t calibration = {0};
@@ -1089,15 +1139,29 @@ static void touch_calibration_overlay_event_cb(lv_event_t *event)
 
     lv_obj_add_flag(s_view.touch_calibration_overlay, LV_OBJ_FLAG_HIDDEN);
 
+    if (!copy_view_settings(&settings)) {
+        return;
+    }
+
     if (solve_touch_calibration(s_view.touch_calibration_samples, &calibration)) {
-        s_view.state->settings.touch_calibration = calibration;
+        settings.touch_calibration = calibration;
+        app_state_set_settings(s_view.state, &settings);
         touch_set_calibration(&calibration);
         (void)app_settings_save_touch_calibration(&calibration);
-        update_touch_calibration_status_locked(s_view.state);
+        if (s_view.touch_calibration_label != NULL) {
+            lv_label_set_text(s_view.touch_calibration_label, "Touch calibration saved");
+        }
         app_state_set_wifi_status(s_view.state, APP_WIFI_STATUS_IDLE, "Touch calibration saved");
     } else {
-        s_view.state->settings.touch_calibration = s_view.previous_touch_calibration;
+        settings.touch_calibration = s_view.previous_touch_calibration;
+        app_state_set_settings(s_view.state, &settings);
         touch_set_calibration(&s_view.previous_touch_calibration);
+        if (s_view.touch_calibration_label != NULL) {
+            lv_label_set_text(
+                s_view.touch_calibration_label,
+                s_view.previous_touch_calibration.valid ? "Touch calibration saved" : "Touch uses default mapping"
+            );
+        }
         app_state_set_wifi_status(s_view.state, APP_WIFI_STATUS_FAILED, "Touch calibration failed");
     }
 }
@@ -1381,11 +1445,6 @@ static void apply_state_locked(const app_state_t *state)
 
     if (s_view.local_time_label != NULL) {
         lv_label_set_text_fmt(s_view.local_time_label, "London %s", state->local_time_text);
-    }
-
-    if (!s_view.wifi_psk_seeded_from_settings && s_view.wifi_psk_textarea != NULL && state->settings.wifi_psk[0] != '\0') {
-        lv_textarea_set_text(s_view.wifi_psk_textarea, state->settings.wifi_psk);
-        s_view.wifi_psk_seeded_from_settings = true;
     }
 }
 
@@ -1981,6 +2040,12 @@ static void create_settings_tile(lv_obj_t *tile)
 
 esp_err_t ui_router_init(app_state_t *state)
 {
+    if (state == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    app_state_get_snapshot(state, &s_view.state_snapshot);
+
     if (!lvgl_port_lock(0)) {
         return ESP_ERR_TIMEOUT;
     }
@@ -2067,7 +2132,7 @@ esp_err_t ui_router_init(app_state_t *state)
     lv_label_set_long_mode(s_view.startup_status_label, LV_LABEL_LONG_WRAP);
 
     lv_tileview_set_tile_by_index(s_view.tileview, 0, 0, LV_ANIM_OFF);
-    apply_state_locked(state);
+    apply_state_locked(&s_view.state_snapshot);
 
     lvgl_port_unlock();
     return ESP_OK;
@@ -2075,11 +2140,17 @@ esp_err_t ui_router_init(app_state_t *state)
 
 esp_err_t ui_router_update(const app_state_t *state)
 {
+    if (state == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    app_state_get_snapshot(state, &s_view.state_snapshot);
+
     if (!lvgl_port_lock(0)) {
         return ESP_ERR_TIMEOUT;
     }
 
-    apply_state_locked(state);
+    apply_state_locked(&s_view.state_snapshot);
 
     lvgl_port_unlock();
     return ESP_OK;

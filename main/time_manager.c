@@ -142,7 +142,7 @@ void time_manager_update_clock(app_state_t *state)
 {
     char local_time_text[APP_TIME_LOCAL_TEXT_MAX_LEN] = {0};
 
-    if (state == NULL || !state->time_valid) {
+    if (state == NULL || !app_state_get_time_valid(state)) {
         return;
     }
 

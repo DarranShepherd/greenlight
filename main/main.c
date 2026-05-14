@@ -20,6 +20,8 @@
 static const char *TAG = "greenlight";
 static app_settings_t s_settings;
 static app_state_t s_app_state;
+static app_settings_t s_state_settings_snapshot;
+static app_state_t s_state_snapshot;
 
 static void update_startup_stage(app_state_t *state, bool wifi_connected)
 {
@@ -27,36 +29,38 @@ static void update_startup_stage(app_state_t *state, bool wifi_connected)
         return;
     }
 
-    if (state->startup_stage == APP_STARTUP_STAGE_COMPLETE) {
+    app_state_get_snapshot(state, &s_state_snapshot);
+
+    if (s_state_snapshot.startup_stage == APP_STARTUP_STAGE_COMPLETE) {
         return;
     }
 
-    if (!state->wifi_has_saved_credentials) {
+    if (!s_state_snapshot.wifi_has_saved_credentials) {
         app_state_set_startup_stage(state, APP_STARTUP_STAGE_ONBOARDING, "Wi-Fi not configured. Open settings to begin onboarding.");
         return;
     }
 
-    if (state->wifi_status == APP_WIFI_STATUS_FAILED) {
-        app_state_set_startup_stage(state, APP_STARTUP_STAGE_ONBOARDING, state->wifi_status_text);
+    if (s_state_snapshot.wifi_status == APP_WIFI_STATUS_FAILED) {
+        app_state_set_startup_stage(state, APP_STARTUP_STAGE_ONBOARDING, s_state_snapshot.wifi_status_text);
         return;
     }
 
     if (!wifi_connected) {
-        if (state->wifi_status == APP_WIFI_STATUS_CONNECTING) {
-            app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, state->wifi_status_text);
+        if (s_state_snapshot.wifi_status == APP_WIFI_STATUS_CONNECTING) {
+            app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, s_state_snapshot.wifi_status_text);
         } else {
             app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, "Connecting to Wi-Fi");
         }
         return;
     }
 
-    if (!state->time_valid) {
-        app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, state->time_status_text);
+    if (!s_state_snapshot.time_valid) {
+        app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, s_state_snapshot.time_status_text);
         return;
     }
 
-    if (!state->tariff_has_data && state->tariff_status != APP_TARIFF_STATUS_OFFLINE) {
-        app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, state->tariff_status_text);
+    if (!s_state_snapshot.tariff_has_data && s_state_snapshot.tariff_status != APP_TARIFF_STATUS_OFFLINE) {
+        app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, s_state_snapshot.tariff_status_text);
         return;
     }
 
@@ -79,7 +83,8 @@ void app_main(void)
     ESP_ERROR_CHECK(app_settings_init());
     ESP_ERROR_CHECK(app_settings_load(&s_settings));
     app_state_init(&s_app_state, &s_settings);
-    if (!s_app_state.wifi_has_saved_credentials) {
+    app_state_get_snapshot(&s_app_state, &s_state_snapshot);
+    if (!s_state_snapshot.wifi_has_saved_credentials) {
         app_state_set_active_screen(&s_app_state, APP_SCREEN_SETTINGS);
         app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_ONBOARDING, "Wi-Fi not configured. Open settings to begin onboarding.");
     }
@@ -99,7 +104,8 @@ void app_main(void)
 
     lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
 
-    ESP_ERROR_CHECK(lcd_set_brightness(s_app_state.settings.brightness_percent));
+    app_state_get_settings(&s_app_state, &s_state_settings_snapshot);
+    ESP_ERROR_CHECK(lcd_set_brightness(s_state_settings_snapshot.brightness_percent));
     ESP_ERROR_CHECK(ui_router_init(&s_app_state));
     app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_BOOTING, "Starting Wi-Fi");
     ESP_ERROR_CHECK(wifi_manager_init(&s_app_state));
@@ -107,10 +113,12 @@ void app_main(void)
     ESP_ERROR_CHECK(time_manager_init(&s_app_state));
     ESP_ERROR_CHECK(sync_controller_init(&s_app_state));
 
-    if (s_app_state.wifi_has_saved_credentials) {
-        ESP_LOGI(TAG, "Attempting Wi-Fi reconnect for SSID %s", s_app_state.settings.wifi_ssid);
+    app_state_get_snapshot(&s_app_state, &s_state_snapshot);
+    app_state_get_settings(&s_app_state, &s_state_settings_snapshot);
+    if (s_state_snapshot.wifi_has_saved_credentials) {
+        ESP_LOGI(TAG, "Attempting Wi-Fi reconnect using saved credentials");
         app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_BOOTING, "Connecting to saved Wi-Fi");
-        ESP_ERROR_CHECK(wifi_manager_request_connect(s_app_state.settings.wifi_ssid, s_app_state.settings.wifi_psk));
+        ESP_ERROR_CHECK(wifi_manager_request_connect(s_state_settings_snapshot.wifi_ssid, s_state_settings_snapshot.wifi_psk));
     } else {
         ESP_LOGI(TAG, "No saved Wi-Fi credentials, showing onboarding");
         ESP_ERROR_CHECK(wifi_manager_request_scan());
@@ -128,12 +136,13 @@ void app_main(void)
         was_wifi_connected = wifi_connected;
         time_manager_update_clock(&s_app_state);
         update_startup_stage(&s_app_state, wifi_connected);
+        app_state_get_snapshot(&s_app_state, &s_state_snapshot);
 
         if (!tariff_entry_released) {
-            if (s_app_state.startup_stage == APP_STARTUP_STAGE_ONBOARDING) {
+            if (s_state_snapshot.startup_stage == APP_STARTUP_STAGE_ONBOARDING) {
                 app_state_set_active_screen(&s_app_state, APP_SCREEN_SETTINGS);
                 tariff_entry_released = true;
-            } else if (s_app_state.tariff_has_data || s_app_state.tariff_status == APP_TARIFF_STATUS_OFFLINE) {
+            } else if (s_state_snapshot.tariff_has_data || s_state_snapshot.tariff_status == APP_TARIFF_STATUS_OFFLINE) {
                 app_state_set_active_screen(&s_app_state, APP_SCREEN_PRIMARY);
                 app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_COMPLETE, "Startup complete");
                 tariff_entry_released = true;

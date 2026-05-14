@@ -11,12 +11,14 @@
 #include <esp_check.h>
 #include <esp_log.h>
 
+#include "app_settings.h"
 #include "octopus_client.h"
 #include "tariff_model.h"
 #include "wifi_manager.h"
 
 #define SYNC_CONTROLLER_STACK_SIZE 8192
 #define SYNC_CONTROLLER_POLL_INTERVAL_MS 1000
+#define SYNC_CONTROLLER_REFRESH_RETRY_SECONDS 30
 #define SYNC_CONTROLLER_TOMORROW_RETRY_SECONDS (5 * 60)
 
 static const char *TAG = "sync_controller";
@@ -30,6 +32,39 @@ static time_t s_last_attempt_time;
 static time_t s_last_success_time;
 static int s_loaded_today_key;
 static app_tariff_status_t s_tariff_status = APP_TARIFF_STATUS_IDLE;
+static bool s_refresh_requested;
+static char s_active_region_code[APP_SETTINGS_REGION_CODE_MAX_LEN + 1];
+
+static void get_requested_region_code(char *buffer, size_t buffer_size)
+{
+    app_settings_t settings = {0};
+
+    if (buffer == NULL || buffer_size == 0) {
+        return;
+    }
+
+    if (s_state == NULL) {
+        strlcpy(buffer, "B", buffer_size);
+        return;
+    }
+
+    app_state_get_settings(s_state, &settings);
+    if (settings.region_code[0] == '\0') {
+        strlcpy(buffer, "B", buffer_size);
+        return;
+    }
+
+    strlcpy(buffer, settings.region_code, buffer_size);
+}
+
+static const char *get_active_region_code(void)
+{
+    if (s_active_region_code[0] == '\0') {
+        return "B";
+    }
+
+    return s_active_region_code;
+}
 
 static void format_time_compact(char *buffer, size_t buffer_size, time_t local_time)
 {
@@ -169,6 +204,7 @@ static void populate_day_view(int date_key, const tariff_day_summary_t *summary,
 
 static void publish_runtime_snapshot(time_t now_local)
 {
+    char requested_region_code[APP_SETTINGS_REGION_CODE_MAX_LEN + 1] = {0};
     char status_text[APP_TARIFF_STATUS_TEXT_MAX_LEN] = {0};
     char current_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN] = {0};
     char next_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN] = {0};
@@ -185,15 +221,28 @@ static void publish_runtime_snapshot(time_t now_local)
     uint8_t preview_count = 0;
 
     localtime_r(&now_local, &local_tm);
+    get_requested_region_code(requested_region_code, sizeof(requested_region_code));
 
     if (s_tariff_status == APP_TARIFF_STATUS_STALE) {
-        snprintf(status_text, sizeof(status_text), "Refresh failed. Showing last good Agile dataset for region %s", s_state->settings.region_code);
+        const char *active_region = get_active_region_code();
+
+        if (strcmp(requested_region_code, active_region) == 0) {
+            snprintf(status_text, sizeof(status_text), "Refresh failed. Showing last good Agile dataset for region %s", active_region);
+        } else {
+            snprintf(
+                status_text,
+                sizeof(status_text),
+                "Refresh failed for region %s. Showing last good Agile dataset for region %s",
+                requested_region_code,
+                active_region
+            );
+        }
     } else if (s_runtime_state.has_tomorrow) {
-        snprintf(status_text, sizeof(status_text), "Today and tomorrow loaded for region %s", s_state->settings.region_code);
+        snprintf(status_text, sizeof(status_text), "Today and tomorrow loaded for region %s", get_active_region_code());
     } else if (local_tm.tm_hour >= 16) {
-        snprintf(status_text, sizeof(status_text), "Today's prices loaded. Polling every 5 min for tomorrow in region %s", s_state->settings.region_code);
+        snprintf(status_text, sizeof(status_text), "Today's prices loaded. Polling every 5 min for tomorrow in region %s", get_active_region_code());
     } else {
-        snprintf(status_text, sizeof(status_text), "Today's prices loaded. Waiting for tomorrow after 16:00 in region %s", s_state->settings.region_code);
+        snprintf(status_text, sizeof(status_text), "Today's prices loaded. Waiting for tomorrow after 16:00 in region %s", get_active_region_code());
     }
 
     if (current_slot != NULL && current_block != NULL) {
@@ -336,6 +385,9 @@ static esp_err_t refresh_tariffs(time_t now_local)
 {
     size_t fetched_slot_count = 0;
     esp_err_t err = ESP_OK;
+    char requested_region[APP_SETTINGS_REGION_CODE_MAX_LEN + 1] = {0};
+
+    get_requested_region_code(requested_region, sizeof(requested_region));
 
     s_last_attempt_time = now_local;
     app_state_set_tariff_status(s_state, APP_TARIFF_STATUS_LOADING, s_has_successful_load, s_runtime_state.has_tomorrow, "Fetching Octopus Agile prices");
@@ -343,7 +395,7 @@ static esp_err_t refresh_tariffs(time_t now_local)
     memset(s_fetched_slots, 0, sizeof(s_fetched_slots));
     memset(&s_next_runtime_state, 0, sizeof(s_next_runtime_state));
 
-    err = octopus_client_fetch_tariffs(s_state->settings.region_code, now_local, s_fetched_slots, TARIFF_MODEL_MAX_SLOTS, &fetched_slot_count);
+    err = octopus_client_fetch_tariffs(requested_region, now_local, s_fetched_slots, TARIFF_MODEL_MAX_SLOTS, &fetched_slot_count);
     if (err != ESP_OK) {
         return err;
     }
@@ -376,10 +428,12 @@ static esp_err_t refresh_tariffs(time_t now_local)
     format_log_timestamp(latest_tomorrow_end_text, sizeof(latest_tomorrow_end_text), latest_tomorrow_end_local);
 
     s_runtime_state = s_next_runtime_state;
+    strlcpy(s_active_region_code, requested_region, sizeof(s_active_region_code));
     s_has_successful_load = true;
     s_last_success_time = now_local;
     s_loaded_today_key = tariff_model_get_local_day_key(now_local);
     s_tariff_status = APP_TARIFF_STATUS_READY;
+    s_refresh_requested = false;
     publish_runtime_snapshot(now_local);
     ESP_LOGI(
         TAG,
@@ -410,6 +464,15 @@ static bool should_fetch_tomorrow(time_t now_local)
     return (s_last_attempt_time == 0) || ((now_local - s_last_attempt_time) >= SYNC_CONTROLLER_TOMORROW_RETRY_SECONDS);
 }
 
+static bool should_retry_requested_refresh(time_t now_local)
+{
+    if (!s_refresh_requested) {
+        return false;
+    }
+
+    return (s_last_attempt_time == 0) || ((now_local - s_last_attempt_time) >= SYNC_CONTROLLER_REFRESH_RETRY_SECONDS);
+}
+
 static void sync_controller_task(void *arg)
 {
     (void)arg;
@@ -430,7 +493,7 @@ static void sync_controller_task(void *arg)
             continue;
         }
 
-        if (!s_state->time_valid) {
+        if (!app_state_get_time_valid(s_state)) {
             if (!s_has_successful_load) {
                 publish_waiting_status("Waiting for valid local time before tariff fetch");
             }
@@ -438,7 +501,7 @@ static void sync_controller_task(void *arg)
             continue;
         }
 
-        if (!s_has_successful_load || s_loaded_today_key != tariff_model_get_local_day_key(now_local) || should_fetch_tomorrow(now_local)) {
+        if (!s_has_successful_load || s_loaded_today_key != tariff_model_get_local_day_key(now_local) || should_fetch_tomorrow(now_local) || should_retry_requested_refresh(now_local)) {
             esp_err_t refresh_err = refresh_tariffs(now_local);
             if (refresh_err != ESP_OK) {
                 ESP_LOGW(TAG, "Tariff refresh failed: %s", esp_err_to_name(refresh_err));
@@ -479,26 +542,33 @@ esp_err_t sync_controller_init(app_state_t *state)
 void sync_controller_request_refresh(void)
 {
     s_last_attempt_time = 0;
-    s_last_success_time = 0;
-    s_loaded_today_key = 0;
-    s_has_successful_load = false;
-    s_tariff_status = APP_TARIFF_STATUS_IDLE;
-    memset(&s_runtime_state, 0, sizeof(s_runtime_state));
-    memset(&s_next_runtime_state, 0, sizeof(s_next_runtime_state));
+    s_refresh_requested = true;
 
     if (s_state == NULL) {
         return;
     }
 
     if (!wifi_manager_is_connected()) {
-        publish_waiting_status("Region changed. Waiting for Wi-Fi before tariff fetch");
+        if (!s_has_successful_load) {
+            publish_waiting_status("Region changed. Waiting for Wi-Fi before tariff fetch");
+        }
         return;
     }
 
-    if (!s_state->time_valid) {
-        publish_waiting_status("Region changed. Waiting for valid local time before tariff fetch");
+    if (!app_state_get_time_valid(s_state)) {
+        if (!s_has_successful_load) {
+            publish_waiting_status("Region changed. Waiting for valid local time before tariff fetch");
+        }
         return;
     }
 
-    publish_waiting_status("Region changed. Refreshing Octopus Agile prices");
+    app_state_set_tariff_status(
+        s_state,
+        APP_TARIFF_STATUS_LOADING,
+        s_has_successful_load,
+        s_runtime_state.has_tomorrow,
+        s_has_successful_load
+            ? "Region changed. Refreshing Octopus Agile prices while keeping the last good dataset active"
+            : "Region changed. Refreshing Octopus Agile prices"
+    );
 }

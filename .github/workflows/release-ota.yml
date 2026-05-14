@@ -32,6 +32,7 @@ jobs:
         run: |
           . /opt/esp/idf/export.sh
           VERSION="${GITHUB_REF_NAME#v}"
+          idf.py reconfigure
           python3 tools/generate_assets.py
           idf.py -DPROJECT_VER="${VERSION}" build
 

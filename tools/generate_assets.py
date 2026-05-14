@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -11,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 FONT_PATH = ROOT / "managed_components" / "lvgl__lvgl" / "scripts" / "built_in_font" / "Montserrat-Medium.ttf"
 LOGO_SCRIPT = ROOT / "tools" / "generate_lvgl_logo.py"
+LOGO_MODULES = ("cairosvg", "PIL")
 
 FONT_JOBS = (
     {
@@ -28,6 +30,51 @@ FONT_JOBS = (
 
 def run_command(command: list[str]) -> None:
     subprocess.run(command, cwd=ROOT, check=True)
+
+
+def can_run_logo_generator(python_executable: str) -> bool:
+    command = [python_executable, "-c", "import cairosvg; import PIL"]
+    result = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def iter_logo_python_candidates() -> list[str]:
+    candidates = [
+        sys.executable,
+        os.path.realpath(sys.executable),
+        "/usr/bin/python3",
+        shutil.which("python3"),
+        shutil.which("python"),
+    ]
+    unique_candidates: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate:
+            continue
+        normalized = os.path.abspath(candidate)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_candidates.append(normalized)
+    return unique_candidates
+
+
+def resolve_logo_python() -> str:
+    for candidate in iter_logo_python_candidates():
+        if can_run_logo_generator(candidate):
+            return candidate
+
+    searched = ", ".join(iter_logo_python_candidates())
+    modules = ", ".join(LOGO_MODULES)
+    raise RuntimeError(
+        f"Unable to find a Python interpreter with {modules} installed. Tried: {searched}"
+    )
 
 
 def normalize_lvgl_include(font_source: Path) -> None:
@@ -71,7 +118,10 @@ def generate_font_assets() -> None:
 
 
 def main() -> int:
-    run_command([sys.executable, str(LOGO_SCRIPT)])
+    logo_python = resolve_logo_python()
+    if Path(logo_python).resolve() != Path(sys.executable).resolve():
+        print(f"Using {logo_python} for logo generation")
+    run_command([logo_python, str(LOGO_SCRIPT)])
     generate_font_assets()
     return 0
 

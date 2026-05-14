@@ -40,6 +40,7 @@ static esp_netif_t *s_sta_netif;
 static QueueHandle_t s_command_queue;
 static EventGroupHandle_t s_event_group;
 static wifi_ap_record_t s_scan_records[APP_WIFI_SCAN_MAX_RESULTS];
+static app_wifi_network_t s_scan_results[APP_WIFI_SCAN_MAX_RESULTS];
 static uint8_t s_scan_record_count;
 static bool s_wifi_started;
 static bool s_is_connected;
@@ -175,27 +176,24 @@ static esp_err_t execute_scan(void)
         .show_hidden = false,
         .scan_type = WIFI_SCAN_TYPE_ACTIVE,
     };
-    wifi_ap_record_t records[APP_WIFI_SCAN_MAX_RESULTS] = {0};
-    app_wifi_network_t scan_results[APP_WIFI_SCAN_MAX_RESULTS] = {0};
     uint16_t ap_count = APP_WIFI_SCAN_MAX_RESULTS;
 
     app_state_set_active_screen(s_state, APP_SCREEN_SETTINGS);
     app_state_set_wifi_status(s_state, APP_WIFI_STATUS_SCANNING, "Scanning nearby Wi-Fi networks");
 
     ESP_RETURN_ON_ERROR(esp_wifi_scan_start(&scan_config, true), TAG, "start Wi-Fi scan");
-    ESP_RETURN_ON_ERROR(esp_wifi_scan_get_ap_records(&ap_count, records), TAG, "read Wi-Fi scan results");
-
     memset(s_scan_records, 0, sizeof(s_scan_records));
-    memcpy(s_scan_records, records, sizeof(records[0]) * ap_count);
+    ESP_RETURN_ON_ERROR(esp_wifi_scan_get_ap_records(&ap_count, s_scan_records), TAG, "read Wi-Fi scan results");
+    memset(s_scan_results, 0, sizeof(s_scan_results));
     s_scan_record_count = (uint8_t)ap_count;
 
     for (uint16_t index = 0; index < ap_count; index++) {
-        copy_text(scan_results[index].ssid, sizeof(scan_results[index].ssid), (const char *)records[index].ssid);
-        scan_results[index].rssi = records[index].rssi;
-        scan_results[index].secure = records[index].authmode != WIFI_AUTH_OPEN;
+        copy_text(s_scan_results[index].ssid, sizeof(s_scan_results[index].ssid), (const char *)s_scan_records[index].ssid);
+        s_scan_results[index].rssi = s_scan_records[index].rssi;
+        s_scan_results[index].secure = s_scan_records[index].authmode != WIFI_AUTH_OPEN;
     }
 
-    app_state_set_wifi_scan_results(s_state, scan_results, (uint8_t)ap_count);
+    app_state_set_wifi_scan_results(s_state, s_scan_results, (uint8_t)ap_count);
     finish_scan_status((uint8_t)ap_count);
     return ESP_OK;
 }

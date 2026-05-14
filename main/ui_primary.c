@@ -372,6 +372,12 @@ void ui_primary_update(const app_state_t *state, ui_router_view_t *view)
         lv_obj_set_style_text_align(view->primary_band_label, LV_TEXT_ALIGN_CENTER, 0);
     }
 
+    if (view->primary_hero_center_col != NULL && view->primary_band_label != NULL) {
+        lv_obj_update_layout(view->primary_band_label);
+        lv_coord_t band_label_height = lv_obj_get_height(view->primary_band_label);
+        lv_obj_set_style_pad_top(view->primary_hero_center_col, band_label_height + 4, 0);
+    }
+
     if (view->primary_pulse_dot != NULL) {
         lv_obj_set_style_bg_color(view->primary_pulse_dot, palette.chip_bg, 0);
         lv_obj_set_style_outline_color(view->primary_pulse_dot, palette.chip_bg, 0);
@@ -481,13 +487,31 @@ void ui_primary_create(lv_obj_t *tile, ui_router_view_t *view)
     lv_obj_set_style_radius(view->primary_hero_card, 16, 0);
     lv_obj_set_style_border_width(view->primary_hero_card, 0, 0);
     lv_obj_set_style_pad_all(view->primary_hero_card, 8, 0);
-    lv_obj_set_style_pad_column(view->primary_hero_card, 8, 0);
+    lv_obj_set_style_pad_row(view->primary_hero_card, 4, 0);
     lv_obj_set_layout(view->primary_hero_card, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(view->primary_hero_card, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_flow(view->primary_hero_card, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(view->primary_hero_card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(view->primary_hero_card, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *hero_left_col = lv_obj_create(view->primary_hero_card);
+    view->primary_band_label = lv_label_create(view->primary_hero_card);
+    lv_obj_set_width(view->primary_band_label, lv_pct(100));
+    lv_label_set_long_mode(view->primary_band_label, LV_LABEL_LONG_WRAP);
+    lv_obj_add_flag(view->primary_band_label, LV_OBJ_FLAG_FLOATING);
+    lv_obj_align(view->primary_band_label, LV_ALIGN_TOP_MID, 0, 0);
+
+    view->primary_hero_content_row = lv_obj_create(view->primary_hero_card);
+    lv_obj_set_width(view->primary_hero_content_row, lv_pct(100));
+    lv_obj_set_flex_grow(view->primary_hero_content_row, 1);
+    lv_obj_set_style_bg_opa(view->primary_hero_content_row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(view->primary_hero_content_row, 0, 0);
+    lv_obj_set_style_pad_all(view->primary_hero_content_row, 0, 0);
+    lv_obj_set_style_pad_column(view->primary_hero_content_row, 8, 0);
+    lv_obj_set_layout(view->primary_hero_content_row, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(view->primary_hero_content_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(view->primary_hero_content_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(view->primary_hero_content_row, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *hero_left_col = lv_obj_create(view->primary_hero_content_row);
     lv_obj_set_width(hero_left_col, 92);
     lv_obj_set_height(hero_left_col, lv_pct(100));
     lv_obj_set_style_bg_opa(hero_left_col, LV_OPA_TRANSP, 0);
@@ -506,23 +530,19 @@ void ui_primary_create(lv_obj_t *tile, ui_router_view_t *view)
     view->primary_price_unit_label = lv_label_create(hero_left_col);
     lv_obj_set_width(view->primary_price_unit_label, lv_pct(100));
 
-    lv_obj_t *hero_center_col = lv_obj_create(view->primary_hero_card);
-    lv_obj_set_width(hero_center_col, 72);
-    lv_obj_set_height(hero_center_col, lv_pct(100));
-    lv_obj_set_style_bg_opa(hero_center_col, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(hero_center_col, 0, 0);
-    lv_obj_set_style_pad_all(hero_center_col, 0, 0);
-    lv_obj_set_style_pad_row(hero_center_col, 6, 0);
-    lv_obj_set_layout(hero_center_col, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(hero_center_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(hero_center_col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_clear_flag(hero_center_col, LV_OBJ_FLAG_SCROLLABLE);
+    view->primary_hero_center_col = lv_obj_create(view->primary_hero_content_row);
+    lv_obj_set_width(view->primary_hero_center_col, 72);
+    lv_obj_set_height(view->primary_hero_center_col, lv_pct(100));
+    lv_obj_set_style_bg_opa(view->primary_hero_center_col, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(view->primary_hero_center_col, 0, 0);
+    lv_obj_set_style_pad_all(view->primary_hero_center_col, 0, 0);
+    lv_obj_set_style_pad_row(view->primary_hero_center_col, 6, 0);
+    lv_obj_set_layout(view->primary_hero_center_col, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(view->primary_hero_center_col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(view->primary_hero_center_col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(view->primary_hero_center_col, LV_OBJ_FLAG_SCROLLABLE);
 
-    view->primary_band_label = lv_label_create(hero_center_col);
-    lv_obj_set_width(view->primary_band_label, lv_pct(100));
-    lv_label_set_long_mode(view->primary_band_label, LV_LABEL_LONG_WRAP);
-
-    view->primary_pulse_dot = lv_obj_create(hero_center_col);
+    view->primary_pulse_dot = lv_obj_create(view->primary_hero_center_col);
     lv_obj_set_size(view->primary_pulse_dot, 48, 48);
     lv_obj_set_style_radius(view->primary_pulse_dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_border_width(view->primary_pulse_dot, 0, 0);
@@ -533,7 +553,7 @@ void ui_primary_create(lv_obj_t *tile, ui_router_view_t *view)
     lv_label_set_text(view->primary_pulse_icon_label, LV_SYMBOL_OK);
     lv_obj_center(view->primary_pulse_icon_label);
 
-    lv_obj_t *hero_right_col = lv_obj_create(view->primary_hero_card);
+    lv_obj_t *hero_right_col = lv_obj_create(view->primary_hero_content_row);
     lv_obj_set_width(hero_right_col, 92);
     lv_obj_set_height(hero_right_col, lv_pct(100));
     lv_obj_set_style_bg_opa(hero_right_col, LV_OPA_TRANSP, 0);

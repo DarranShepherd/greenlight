@@ -26,6 +26,8 @@ typedef struct {
     lv_obj_t *primary_hero_card;
     lv_obj_t *primary_band_chip;
     lv_obj_t *primary_band_label;
+    lv_obj_t *primary_hero_content_row;
+    lv_obj_t *primary_hero_center_col;
     lv_obj_t *primary_pulse_dot;
     lv_obj_t *primary_pulse_icon_label;
     lv_obj_t *primary_price_label;

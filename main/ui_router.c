@@ -355,3 +355,12 @@ esp_err_t ui_router_update(const app_state_t *state)
     lvgl_port_unlock();
     return ESP_OK;
 }
+
+lv_obj_t *ui_router_get_screen_root(app_screen_t screen)
+{
+    if (screen >= APP_SCREEN_COUNT) {
+        return NULL;
+    }
+
+    return s_view.tiles[screen];
+}

@@ -1,0 +1,11 @@
+menu "Greenlight"
+
+config GREENLIGHT_DOCS_SCREENSHOT_MODE
+    bool "Enable documentation screenshot firmware mode"
+    default n
+    help
+        Build a deterministic firmware path that skips Wi-Fi, time sync, and tariff
+        refresh, renders curated UI states, and streams LVGL snapshots over UART so
+        host tooling can regenerate documentation screenshots on demand.
+
+endmenu

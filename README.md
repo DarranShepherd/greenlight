@@ -391,6 +391,20 @@ SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.debug.defaults" \
 idf.py build
 ```
 
+Documentation screenshot build:
+
+```bash
+idf.py -B build-docs \
+	-DSDKCONFIG=sdkconfig.docs-screenshots \
+	-DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.docs-screenshots.defaults" \
+	build flash
+
+python3 -m pip install pyserial
+python3 tools/capture_doc_screenshots.py --port /dev/ttyUSB0 --reset-on-connect
+```
+
+This profile keeps the normal firmware path untouched. It uses an isolated `build-docs/` directory and generates a local `sdkconfig.docs-screenshots` file from the checked-in `sdkconfig.defaults` and `sdkconfig.docs-screenshots.defaults` inputs, boots into a deterministic documentation-only mode, renders curated primary and detail tariff examples, and streams four LVGL RGB565 snapshots over UART as framed `GLSHOT` records. The host script can reset the board after opening the port, reassembles the streamed slices, and writes PNG files to `docs/generated/screenshots/` by default.
+
 Flash:
 
 ```bash

@@ -10,6 +10,7 @@
 
 #include "app_settings.h"
 #include "app_state.h"
+#include "docs_screenshot.h"
 #include "lcd.h"
 #include "sync_controller.h"
 #include "time_manager.h"
@@ -71,29 +72,45 @@ void app_main(void)
 {
     esp_lcd_panel_io_handle_t panel_io = NULL;
     esp_lcd_panel_handle_t panel = NULL;
+#if !CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
     esp_lcd_touch_handle_t touch_handle = NULL;
-    lv_display_t *display = NULL;
     lv_indev_t *touch_input = NULL;
     lvgl_port_touch_cfg_t touch_config = {0};
+#endif
+    lv_display_t *display = NULL;
     bool was_wifi_connected = false;
     bool tariff_entry_released = false;
 
     ESP_LOGI(TAG, "Starting Greenlight on CYD");
 
     ESP_ERROR_CHECK(app_settings_init());
+#if CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
+    app_settings_set_defaults(&s_settings);
+#else
     ESP_ERROR_CHECK(app_settings_load(&s_settings));
+#endif
     app_state_init(&s_app_state, &s_settings);
     app_state_get_snapshot(&s_app_state, &s_state_snapshot);
+#if !CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
     if (!s_state_snapshot.wifi_has_saved_credentials) {
         app_state_set_active_screen(&s_app_state, APP_SCREEN_SETTINGS);
         app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_ONBOARDING, "Wi-Fi not configured. Open settings to begin onboarding.");
     }
+#endif
 
     ESP_ERROR_CHECK(lcd_backlight_init());
     ESP_ERROR_CHECK(lcd_init(&panel_io, &panel));
 
     display = lvgl_display_init(panel_io, panel);
     ESP_RETURN_VOID_ON_FALSE(display != NULL, TAG, "initialize LVGL display");
+    ESP_LOGI(TAG, "LVGL display initialized");
+
+    ESP_RETURN_VOID_ON_FALSE(lvgl_port_lock(1000), TAG, "lock LVGL for display rotation");
+    lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
+    lvgl_port_unlock();
+    ESP_LOGI(TAG, "LVGL display rotation applied");
+
+#if !CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
 
     touch_set_calibration(&s_settings.touch_calibration);
     ESP_ERROR_CHECK(touch_init(&touch_handle));
@@ -101,12 +118,29 @@ void app_main(void)
     touch_config.handle = touch_handle;
     touch_input = lvgl_port_add_touch(&touch_config);
     ESP_RETURN_VOID_ON_FALSE(touch_input != NULL, TAG, "register touch input");
-
-    lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
+#endif
 
     app_state_get_settings(&s_app_state, &s_state_settings_snapshot);
     ESP_ERROR_CHECK(lcd_set_brightness(s_state_settings_snapshot.brightness_percent));
+
+#if CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
+    ESP_LOGI(TAG, "Docs mode waiting briefly for LVGL task to settle");
+    vTaskDelay(pdMS_TO_TICKS(100));
+#endif
+
+    ESP_LOGI(TAG, "Initializing UI router");
     ESP_ERROR_CHECK(ui_router_init(&s_app_state));
+    ESP_LOGI(TAG, "UI router initialized");
+
+#if CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
+    ESP_LOGI(TAG, "Starting documentation screenshot runner");
+    ESP_ERROR_CHECK(docs_screenshot_run(&s_app_state));
+    ESP_LOGI(TAG, "Documentation screenshot runner finished");
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+#endif
+
     app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_BOOTING, "Starting Wi-Fi");
     ESP_ERROR_CHECK(wifi_manager_init(&s_app_state));
     ESP_ERROR_CHECK(wifi_manager_start());

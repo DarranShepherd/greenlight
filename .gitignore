@@ -1,8 +1,12 @@
 build/
+build-docs/
 .host-test-bin/
 backups/
 generated/
 managed_components/
 sdkconfig
+sdkconfig.debug
+sdkconfig.docs-screenshots
 sdkconfig.old
 compile_commands.json
+__pycache__/

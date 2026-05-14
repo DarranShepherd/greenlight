@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "app_settings.c"
         "app_state.c"
+        "docs_screenshot.c"
         "lcd.c"
         "lv_font_montserrat_20_numeric.c"
         "lv_font_montserrat_28_numeric.c"

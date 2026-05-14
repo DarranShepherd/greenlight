@@ -16,6 +16,23 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Install asset generation dependencies
+        shell: bash
+        run: |
+          apt-get update
+          apt-get install --yes nodejs npm python3-cairosvg python3-pil
+          npm install --global lv_font_conv
+
+      - name: Regenerate generated assets
+        shell: bash
+        run: |
+          python3 tools/generate_assets.py
+
+      - name: Verify generated assets are up to date
+        shell: bash
+        run: |
+          git diff --exit-code -- main/lv_font_montserrat_20_numeric.c main/lv_font_montserrat_28_numeric.c main/splash_logo.c main/splash_logo.h
+
       - name: Build ESP-IDF firmware
         shell: bash
         run: |

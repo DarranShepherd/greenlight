@@ -6,7 +6,6 @@
 #include <string.h>
 
 #include <esp_check.h>
-#include <esp_crt_bundle.h>
 #include <esp_http_client.h>
 #include <esp_log.h>
 
@@ -16,6 +15,9 @@
 
 static const char *TAG = "octopus_client";
 static const char *OCTOPUS_API_PRODUCTS_URL = "https://api.octopus.energy/v1/products/?brand=OCTOPUS_ENERGY&is_business=false&page_size=100";
+
+extern const char octopus_amazon_root_ca_1_pem_start[] asm("_binary_octopus_amazon_root_ca_1_pem_start");
+extern const char octopus_amazon_root_ca_1_pem_end[] asm("_binary_octopus_amazon_root_ca_1_pem_end");
 
 /*
  * Tariff requests cover two local days, which is usually 96 half-hour rows and can
@@ -238,7 +240,7 @@ static esp_err_t perform_get_request(const char *url, http_buffer_t *response)
     http_config = (esp_http_client_config_t){
         .url = url,
         .timeout_ms = 15000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
+        .cert_pem = octopus_amazon_root_ca_1_pem_start,
     };
 
     http_client = esp_http_client_init(&http_config);
@@ -319,7 +321,7 @@ static esp_err_t discover_active_product_code_streaming(char *product_code, size
     esp_http_client_config_t http_config = {
         .url = OCTOPUS_API_PRODUCTS_URL,
         .timeout_ms = 15000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
+        .cert_pem = octopus_amazon_root_ca_1_pem_start,
     };
     esp_http_client_handle_t http_client = NULL;
     size_t results_window_length = 0;

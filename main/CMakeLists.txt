@@ -3,6 +3,8 @@ idf_component_register(
         "app_settings.c"
         "app_state.c"
         "lcd.c"
+        "lv_font_montserrat_20_numeric.c"
+        "lv_font_montserrat_28_numeric.c"
         "main.c"
         "octopus_client.c"
         "splash_logo.c"
@@ -12,6 +14,8 @@ idf_component_register(
         "touch.c"
         "ui_router.c"
         "wifi_manager.c"
+    EMBED_TXTFILES
+        "../certs/octopus-amazon-root-ca-1.pem"
     INCLUDE_DIRS
         "."
     REQUIRES

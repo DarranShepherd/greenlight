@@ -375,6 +375,22 @@ idf.py set-target esp32
 idf.py build
 ```
 
+Generated assets:
+
+```bash
+python3 tools/generate_assets.py
+```
+
+This regenerates the embedded splash asset and the custom LVGL subset fonts. CI runs this step before the firmware build and fails if the committed generated files are stale.
+
+Local debug build with assertions, perf monitor, and runtime GDB stub enabled:
+
+```bash
+SDKCONFIG=sdkconfig.debug \
+SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.debug.defaults" \
+idf.py build
+```
+
 Flash:
 
 ```bash

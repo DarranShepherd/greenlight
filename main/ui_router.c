@@ -10,6 +10,7 @@
 
 #include "app_settings.h"
 #include "lcd.h"
+#include "numeric_fonts.h"
 #include "splash_logo.h"
 #include "sync_controller.h"
 #include "time_manager.h"
@@ -503,7 +504,7 @@ static void style_preview_card(lv_obj_t *card, lv_obj_t *time_label, lv_obj_t *b
     lv_obj_set_style_text_color(price_label, active ? palette.hero_muted_text : lv_color_hex(0x94a3b8), 0);
     lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_align(band_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(band_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(band_label, &lv_font_montserrat_14, 0);
 }
 
 static lv_color_t get_band_fill_color(tariff_band_t band)
@@ -1269,7 +1270,6 @@ static void update_primary_tile_locked(const app_state_t *state)
     if (s_view.primary_price_label != NULL) {
         lv_obj_set_style_text_color(s_view.primary_price_label, palette.hero_text, 0);
         lv_obj_set_style_text_align(s_view.primary_price_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_font(s_view.primary_price_label, &lv_font_montserrat_28, 0);
     }
 
     if (s_view.primary_price_unit_label != NULL) {
@@ -1298,6 +1298,7 @@ static void update_primary_tile_locked(const app_state_t *state)
         time_t now_local = time(NULL);
 
         lv_label_set_text(s_view.primary_band_label, tariff_model_get_band_name(state->tariff_current_band));
+        lv_obj_set_style_text_font(s_view.primary_price_label, &lv_font_montserrat_28_numeric, 0);
         snprintf(price_text, sizeof(price_text), "%.1f", (double)state->tariff_current_price);
         lv_label_set_text(s_view.primary_price_label, price_text);
         if (s_view.primary_price_unit_label != NULL) {
@@ -1312,6 +1313,7 @@ static void update_primary_tile_locked(const app_state_t *state)
         set_primary_pulse_enabled(tariff_band_is_extreme(state->tariff_current_band) && palette.pulse);
     } else {
         lv_label_set_text(s_view.primary_band_label, app_state_get_tariff_status_name(state->tariff_status));
+        lv_obj_set_style_text_font(s_view.primary_price_label, &lv_font_montserrat_14, 0);
         lv_label_set_text(s_view.primary_price_label, state->tariff_current_text);
         if (s_view.primary_price_unit_label != NULL) {
             lv_label_set_text(s_view.primary_price_unit_label, "");
@@ -1471,14 +1473,17 @@ static void create_primary_tile(lv_obj_t *tile)
 
     s_view.primary_clock_label = lv_label_create(s_view.primary_top_bar);
     lv_obj_set_width(s_view.primary_clock_label, 52);
+    lv_obj_set_style_text_color(s_view.primary_clock_label, lv_color_white(), 0);
 
     s_view.primary_title_label = lv_label_create(s_view.primary_top_bar);
     lv_obj_set_flex_grow(s_view.primary_title_label, 1);
     lv_obj_set_style_text_align(s_view.primary_title_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(s_view.primary_title_label, lv_color_white(), 0);
 
     s_view.primary_wifi_label = lv_label_create(s_view.primary_top_bar);
     lv_obj_set_width(s_view.primary_wifi_label, 52);
     lv_obj_set_style_text_align(s_view.primary_wifi_label, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_color(s_view.primary_wifi_label, lv_color_white(), 0);
 
     s_view.primary_hero_card = lv_obj_create(tile);
     lv_obj_set_width(s_view.primary_hero_card, lv_pct(100));
@@ -1663,7 +1668,7 @@ static void create_detail_tile(lv_obj_t *tile)
 
         s_view.detail_day_titles[day_index] = lv_label_create(panel);
         lv_obj_set_style_text_color(s_view.detail_day_titles[day_index], lv_color_white(), 0);
-        lv_obj_set_style_text_font(s_view.detail_day_titles[day_index], &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_font(s_view.detail_day_titles[day_index], &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_align(s_view.detail_day_titles[day_index], LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_width(s_view.detail_day_titles[day_index], lv_pct(100));
 
@@ -1844,7 +1849,7 @@ static void create_settings_tile(lv_obj_t *tile)
 
     s_view.brightness_label = lv_label_create(brightness_card);
     lv_obj_set_style_text_color(s_view.brightness_label, lv_color_hex(0xfbbf24), 0);
-    lv_obj_set_style_text_font(s_view.brightness_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(s_view.brightness_label, &lv_font_montserrat_20_numeric, 0);
 
     lv_obj_t *brightness_row = lv_obj_create(brightness_card);
     lv_obj_set_width(brightness_row, lv_pct(100));
@@ -1903,7 +1908,7 @@ static void create_settings_tile(lv_obj_t *tile)
     s_view.region_label = lv_label_create(region_card);
     lv_obj_set_width(s_view.region_label, lv_pct(100));
     lv_obj_set_style_text_color(s_view.region_label, lv_color_hex(0x93c5fd), 0);
-    lv_obj_set_style_text_font(s_view.region_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(s_view.region_label, &lv_font_montserrat_14, 0);
 
     lv_obj_t *region_row = lv_obj_create(region_card);
     lv_obj_set_width(region_row, lv_pct(100));
@@ -2030,10 +2035,21 @@ static void create_settings_tile(lv_obj_t *tile)
     s_view.wifi_keyboard = lv_keyboard_create(tile);
     lv_obj_set_width(s_view.wifi_keyboard, lv_pct(100));
     lv_obj_set_height(s_view.wifi_keyboard, 150);
-    lv_obj_set_style_radius(s_view.wifi_keyboard, 16, 0);
-    lv_obj_set_style_bg_color(s_view.wifi_keyboard, lv_color_hex(0x0f172a), 0);
-    lv_obj_set_style_border_color(s_view.wifi_keyboard, lv_color_hex(0x334155), 0);
-    lv_obj_set_style_text_color(s_view.wifi_keyboard, lv_color_white(), 0);
+    lv_obj_set_style_radius(s_view.wifi_keyboard, 16, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(s_view.wifi_keyboard, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_view.wifi_keyboard, lv_color_hex(0x020617), LV_PART_MAIN);
+    lv_obj_set_style_border_width(s_view.wifi_keyboard, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(s_view.wifi_keyboard, lv_color_hex(0x334155), LV_PART_MAIN);
+    lv_obj_set_style_pad_all(s_view.wifi_keyboard, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_gap(s_view.wifi_keyboard, 6, LV_PART_MAIN);
+    lv_obj_set_style_radius(s_view.wifi_keyboard, 10, LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(s_view.wifi_keyboard, LV_OPA_COVER, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(s_view.wifi_keyboard, lv_color_hex(0x1e293b), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(s_view.wifi_keyboard, lv_color_hex(0x334155), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(s_view.wifi_keyboard, lv_color_hex(0x2563eb), LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(s_view.wifi_keyboard, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_border_width(s_view.wifi_keyboard, 0, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(s_view.wifi_keyboard, 0, LV_PART_ITEMS);
     lv_obj_add_event_cb(s_view.wifi_keyboard, wifi_keyboard_event_cb, LV_EVENT_ALL, NULL);
     lv_obj_add_flag(s_view.wifi_keyboard, LV_OBJ_FLAG_HIDDEN);
 }
@@ -2113,7 +2129,7 @@ esp_err_t ui_router_init(app_state_t *state)
 
     s_view.startup_title_label = lv_label_create(s_view.startup_overlay);
     lv_obj_set_style_text_color(s_view.startup_title_label, lv_color_white(), 0);
-    lv_obj_set_style_text_font(s_view.startup_title_label, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(s_view.startup_title_label, &lv_font_montserrat_28_numeric, 0);
     lv_obj_set_style_text_align(s_view.startup_title_label, LV_TEXT_ALIGN_CENTER, 0);
 
     lv_obj_t *startup_rule = lv_obj_create(s_view.startup_overlay);

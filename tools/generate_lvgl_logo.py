@@ -11,10 +11,6 @@ SOURCE_PATH = ROOT / "main" / "splash_logo.c"
 OUTPUT_WIDTH = 120
 
 
-def rgb888_to_rgb565(red: int, green: int, blue: int) -> int:
-    return ((red & 0xF8) << 8) | ((green & 0xFC) << 3) | (blue >> 3)
-
-
 def emit_bytes(data: bytes, indent: str = "    ", per_line: int = 12) -> str:
     lines = []
     for offset in range(0, len(data), per_line):
@@ -29,13 +25,26 @@ def main() -> None:
     svg2png(url=str(SVG_PATH), write_to=str(PNG_PATH), output_width=OUTPUT_WIDTH)
 
     image = Image.open(PNG_PATH).convert("RGB")
-    width, height = image.size
+    indexed_image = image.quantize(colors=256)
+    width, height = indexed_image.size
 
+    palette = indexed_image.getpalette()[: 256 * 3]
     payload = bytearray()
-    for red, green, blue in image.getdata():
-        pixel = rgb888_to_rgb565(red, green, blue)
-        payload.append(pixel & 0xFF)
-        payload.append((pixel >> 8) & 0xFF)
+
+    for palette_index in range(256):
+        base = palette_index * 3
+        if base + 2 < len(palette):
+            red = palette[base]
+            green = palette[base + 1]
+            blue = palette[base + 2]
+        else:
+            red = 0
+            green = 0
+            blue = 0
+
+        payload.extend((blue, green, red, 0xFF))
+
+    payload.extend(indexed_image.tobytes())
 
     header_text = """#pragma once
 
@@ -61,10 +70,10 @@ const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMAGE_SPLASH_
 const lv_image_dsc_t splash_logo = {{
     .header = {{
         .magic = LV_IMAGE_HEADER_MAGIC,
-        .cf = LV_COLOR_FORMAT_RGB565,
+        .cf = LV_COLOR_FORMAT_I8,
         .w = {width},
         .h = {height},
-        .stride = {width * 2},
+        .stride = {width},
     }},
     .data_size = sizeof(splash_logo_map),
     .data = splash_logo_map,

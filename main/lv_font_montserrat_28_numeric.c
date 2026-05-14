@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 28 px
  * Bpp: 4
- * Opts: --no-compress --no-prefilter --bpp 4 --size 28 --font /workspaces/greenlight/managed_components/lvgl__lvgl/scripts/built_in_font/Montserrat-Medium.ttf -r 0x2D,0x2E,0x30-0x39,0x47,0x65,0x67-0x69,0x6C,0x6E,0x72,0x74 --format lvgl -o /workspaces/greenlight/main/lv_font_montserrat_28_numeric.c --force-fast-kern-format
+ * Opts: --no-compress --no-prefilter --bpp 4 --size 28 --font managed_components/lvgl__lvgl/scripts/built_in_font/Montserrat-Medium.ttf -r 0x2D,0x2E,0x30-0x39,0x47,0x65,0x67-0x69,0x6C,0x6E,0x72,0x74 --format lvgl -o main/lv_font_montserrat_28_numeric.c --force-fast-kern-format
  ******************************************************************************/
 
 #include <lvgl.h>

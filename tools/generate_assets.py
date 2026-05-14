@@ -32,6 +32,10 @@ def run_command(command: list[str]) -> None:
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def path_from_root(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
+
+
 def can_run_logo_generator(python_executable: str) -> bool:
     command = [python_executable, "-c", "import cairosvg; import PIL"]
     result = subprocess.run(
@@ -103,13 +107,13 @@ def generate_font_assets() -> None:
             "--size",
             str(job["size"]),
             "--font",
-            str(FONT_PATH),
+            path_from_root(FONT_PATH),
             "-r",
             job["ranges"],
             "--format",
             "lvgl",
             "-o",
-            str(job["output"]),
+            path_from_root(job["output"]),
             "--force-fast-kern-format",
         ]
         run_command(command)

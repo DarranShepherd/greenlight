@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 20 px
  * Bpp: 4
- * Opts: --no-compress --no-prefilter --bpp 4 --size 20 --font /workspaces/greenlight/managed_components/lvgl__lvgl/scripts/built_in_font/Montserrat-Medium.ttf -r 0x25,0x30-0x39 --format lvgl -o /workspaces/greenlight/main/lv_font_montserrat_20_numeric.c --force-fast-kern-format
+ * Opts: --no-compress --no-prefilter --bpp 4 --size 20 --font managed_components/lvgl__lvgl/scripts/built_in_font/Montserrat-Medium.ttf -r 0x25,0x30-0x39 --format lvgl -o main/lv_font_montserrat_20_numeric.c --force-fast-kern-format
  ******************************************************************************/
 
 #include <lvgl.h>

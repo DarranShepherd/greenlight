@@ -78,6 +78,22 @@ static bool tariff_band_is_extreme(tariff_band_t band)
     return band == TARIFF_BAND_SUPER_CHEAP || band == TARIFF_BAND_VERY_EXPENSIVE;
 }
 
+static const char *get_primary_band_indicator_symbol(tariff_band_t band)
+{
+    switch (band) {
+        case TARIFF_BAND_SUPER_CHEAP:
+        case TARIFF_BAND_CHEAP:
+            return LV_SYMBOL_OK;
+        case TARIFF_BAND_NORMAL:
+            return "-";
+        case TARIFF_BAND_EXPENSIVE:
+        case TARIFF_BAND_VERY_EXPENSIVE:
+            return LV_SYMBOL_CLOSE;
+        default:
+            return "?";
+    }
+}
+
 static primary_palette_t get_primary_palette(const app_state_t *state)
 {
     if (state->tariff_has_data && state->tariff_current_block_valid) {
@@ -117,13 +133,13 @@ static primary_palette_t get_primary_palette(const app_state_t *state)
                 };
             case TARIFF_BAND_EXPENSIVE:
                 return (primary_palette_t){
-                    .tile_bg = lv_color_hex(0x33160f),
-                    .hero_bg = lv_color_hex(0xc2410c),
-                    .chip_bg = lv_color_hex(0xffedd5),
-                    .chip_text = lv_color_hex(0x7c2d12),
+                    .tile_bg = lv_color_hex(0x3b1014),
+                    .hero_bg = lv_color_hex(0xc62828),
+                    .chip_bg = lv_color_hex(0xffe4e6),
+                    .chip_text = lv_color_hex(0x881337),
                     .hero_text = lv_color_white(),
-                    .hero_muted_text = lv_color_hex(0xffedd5),
-                    .footer_bg = lv_color_hex(0x9a3412),
+                    .hero_muted_text = lv_color_hex(0xffe4e6),
+                    .footer_bg = lv_color_hex(0x9f1239),
                     .pulse = false,
                 };
             case TARIFF_BAND_VERY_EXPENSIVE:
@@ -205,13 +221,13 @@ static primary_palette_t get_primary_palette_for_band(tariff_band_t band)
             };
         case TARIFF_BAND_EXPENSIVE:
             return (primary_palette_t){
-                .tile_bg = lv_color_hex(0x33160f),
-                .hero_bg = lv_color_hex(0xc2410c),
-                .chip_bg = lv_color_hex(0xffedd5),
-                .chip_text = lv_color_hex(0x7c2d12),
+                .tile_bg = lv_color_hex(0x3b1014),
+                .hero_bg = lv_color_hex(0xc62828),
+                .chip_bg = lv_color_hex(0xffe4e6),
+                .chip_text = lv_color_hex(0x881337),
                 .hero_text = lv_color_white(),
-                .hero_muted_text = lv_color_hex(0xffedd5),
-                .footer_bg = lv_color_hex(0x9a3412),
+                .hero_muted_text = lv_color_hex(0xffe4e6),
+                .footer_bg = lv_color_hex(0x9f1239),
                 .pulse = false,
             };
         case TARIFF_BAND_VERY_EXPENSIVE:
@@ -418,6 +434,9 @@ void ui_primary_update(const app_state_t *state, ui_router_view_t *view)
         time_t now_local = time(NULL);
 
         lv_label_set_text(view->primary_band_label, tariff_model_get_band_name(state->tariff_current_band));
+        if (view->primary_pulse_icon_label != NULL) {
+            lv_label_set_text(view->primary_pulse_icon_label, get_primary_band_indicator_symbol(state->tariff_current_band));
+        }
         lv_obj_set_style_text_font(view->primary_price_label, &lv_font_montserrat_28_numeric, 0);
         snprintf(price_text, sizeof(price_text), "%.1f", (double)state->tariff_current_price);
         lv_label_set_text(view->primary_price_label, price_text);
@@ -433,6 +452,9 @@ void ui_primary_update(const app_state_t *state, ui_router_view_t *view)
         set_primary_pulse_enabled(view, tariff_band_is_extreme(state->tariff_current_band) && palette.pulse);
     } else {
         lv_label_set_text(view->primary_band_label, app_state_get_tariff_status_name(state->tariff_status));
+        if (view->primary_pulse_icon_label != NULL) {
+            lv_label_set_text(view->primary_pulse_icon_label, "?");
+        }
         lv_obj_set_style_text_font(view->primary_price_label, &lv_font_montserrat_14, 0);
         lv_label_set_text(view->primary_price_label, state->tariff_current_text);
         if (view->primary_price_unit_label != NULL) {

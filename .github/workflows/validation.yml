@@ -27,6 +27,7 @@ jobs:
         shell: bash
         run: |
           . /opt/esp/idf/export.sh
+          git config --global --add safe.directory "$PWD"
           idf.py reconfigure
           python3 tools/generate_assets.py
 

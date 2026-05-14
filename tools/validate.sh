@@ -22,6 +22,23 @@ require_command() {
     fi
 }
 
+ensure_git_safe_directory() {
+    require_command git
+
+    git_probe_output=$(git -C "$ROOT_DIR" rev-parse --show-toplevel 2>&1) && return
+
+    case "$git_probe_output" in
+        *"detected dubious ownership in repository at"*)
+            git config --global --add safe.directory "$ROOT_DIR"
+            git -C "$ROOT_DIR" rev-parse --show-toplevel >/dev/null
+            ;;
+        *)
+            printf '%s\n' "$git_probe_output" >&2
+            return 1
+            ;;
+    esac
+}
+
 ensure_font_source() {
     if [ -f "$FONT_PATH" ]; then
         return
@@ -38,6 +55,8 @@ run_host() {
 }
 
 run_firmware() {
+    ensure_git_safe_directory
+
     echo "==> Regenerating generated assets"
     require_command python3
     ensure_font_source

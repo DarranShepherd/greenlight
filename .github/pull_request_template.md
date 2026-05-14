@@ -4,8 +4,9 @@ Describe the change in one or two sentences.
 
 ## Validation
 
-- [ ] `idf.py build`
-- [ ] `sh tools/run_host_tests.sh`
+- [ ] `sh tools/validate.sh`
+- [ ] `sh tools/validate.sh host`
+- [ ] `sh tools/validate.sh firmware`
 - [ ] Not applicable
 
 ## Scope Check

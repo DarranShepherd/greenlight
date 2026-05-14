@@ -4,13 +4,15 @@
 
 Please do not open a public GitHub issue for suspected vulnerabilities.
 
-Use GitHub's private vulnerability reporting for this repository if it is enabled. If private reporting is not available yet, contact the repository owner privately through GitHub and include enough detail to reproduce the issue safely.
+Use GitHub's private vulnerability reporting for this repository and include enough detail to reproduce the issue safely.
 
 Include:
 
 - Affected hardware, firmware revision, and commit if known
 - Reproduction steps or proof-of-concept details
 - Impact assessment and any suggested mitigations
+
+Open the repository's Security tab and choose Report a vulnerability to start a private report.
 
 I will aim to acknowledge reports within 7 days and follow up with remediation status as fixes are triaged.
 

@@ -3,6 +3,7 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+FONT_PATH="$ROOT_DIR/managed_components/lvgl__lvgl/scripts/built_in_font/Montserrat-Medium.ttf"
 
 usage() {
     cat <<'EOF'
@@ -21,6 +22,16 @@ require_command() {
     fi
 }
 
+ensure_font_source() {
+    if [ -f "$FONT_PATH" ]; then
+        return
+    fi
+
+    echo "==> Populating managed components"
+    require_command idf.py
+    idf.py -C "$ROOT_DIR" reconfigure
+}
+
 run_host() {
     echo "==> Running host-side tests"
     sh "$ROOT_DIR/tools/run_host_tests.sh"
@@ -29,6 +40,7 @@ run_host() {
 run_firmware() {
     echo "==> Regenerating generated assets"
     require_command python3
+    ensure_font_source
     python3 "$ROOT_DIR/tools/generate_assets.py"
 
     echo "==> Verifying generated assets are up to date"

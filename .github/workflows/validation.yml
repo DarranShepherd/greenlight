@@ -26,6 +26,8 @@ jobs:
       - name: Regenerate generated assets
         shell: bash
         run: |
+          . /opt/esp/idf/export.sh
+          idf.py reconfigure
           python3 tools/generate_assets.py
 
       - name: Verify generated assets are up to date

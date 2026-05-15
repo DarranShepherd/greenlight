@@ -499,12 +499,11 @@ static void firmware_update_button_event_cb(lv_event_t *event)
     (void)ota_manager_request_update();
 }
 
-static void touch_calibration_start_event_cb(lv_event_t *event)
+static void start_touch_calibration(ui_router_view_t *view)
 {
     app_settings_t settings = {0};
-    ui_router_view_t *view = (ui_router_view_t *)lv_event_get_user_data(event);
 
-    if (lv_event_get_code(event) != LV_EVENT_CLICKED || view == NULL || view->touch_calibration_overlay == NULL) {
+    if (view == NULL || view->touch_calibration_overlay == NULL) {
         return;
     }
 
@@ -520,6 +519,17 @@ static void touch_calibration_start_event_cb(lv_event_t *event)
     lv_obj_clear_flag(view->touch_calibration_overlay, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(view->touch_calibration_overlay);
     update_touch_calibration_overlay(view);
+}
+
+static void touch_calibration_start_event_cb(lv_event_t *event)
+{
+    ui_router_view_t *view = (ui_router_view_t *)lv_event_get_user_data(event);
+
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || view == NULL || view->touch_calibration_overlay == NULL) {
+        return;
+    }
+
+    start_touch_calibration(view);
 }
 
 static void touch_calibration_overlay_event_cb(lv_event_t *event)
@@ -581,6 +591,13 @@ static void touch_calibration_overlay_event_cb(lv_event_t *event)
 void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
 {
     char clock_text[12] = {0};
+
+    if (!view->touch_calibration_auto_started &&
+        state->startup_stage == APP_STARTUP_STAGE_ONBOARDING &&
+        !state->settings.touch_calibration.valid) {
+        view->touch_calibration_auto_started = true;
+        start_touch_calibration(view);
+    }
 
     if (view->brightness_label != NULL) {
         lv_label_set_text_fmt(view->brightness_label, "%u%%", (unsigned int)state->settings.brightness_percent);

@@ -3,9 +3,9 @@
 #include <driver/ledc.h>
 #include <driver/spi_master.h>
 #include <esp_check.h>
-#include <esp_lcd_ili9341.h>
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
+#include <esp_lcd_panel_st7789.h>
 #include <esp_lcd_panel_vendor.h>
 #include <esp_log.h>
 #include <esp_lvgl_port.h>
@@ -13,6 +13,39 @@
 #include "hardware.h"
 
 static const char *TAG = "lcd";
+
+static esp_err_t lcd_send_command(esp_lcd_panel_io_handle_t panel_io, int command, const void *data, size_t data_size)
+{
+    return esp_lcd_panel_io_tx_param(panel_io, command, data, data_size);
+}
+
+static esp_err_t lcd_apply_vendor_st7789_init(esp_lcd_panel_io_handle_t panel_io)
+{
+    static const uint8_t porch_control[] = {0x0C, 0x0C, 0x00, 0x33, 0x33};
+    static const uint8_t power_control_1[] = {0xA4, 0xA1};
+    static const uint8_t gamma_positive[] = {0xD0, 0x07, 0x0E, 0x0B, 0x0A, 0x14, 0x38, 0x33, 0x4F, 0x37, 0x16, 0x16, 0x2A, 0x2E};
+    static const uint8_t gamma_negative[] = {0xD0, 0x0B, 0x10, 0x08, 0x08, 0x06, 0x35, 0x54, 0x4D, 0x0A, 0x14, 0x14, 0x2C, 0x2F};
+    static const uint8_t gate_control[] = {0x11, 0x11, 0x03};
+
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0x36, (uint8_t[]) {0x00}, 1), TAG, "set MADCTL");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0x3A, (uint8_t[]) {0x05}, 1), TAG, "set COLMOD");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xB2, porch_control, sizeof(porch_control)), TAG, "set porch control");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xB7, (uint8_t[]) {0x74}, 1), TAG, "set gate control");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xBB, (uint8_t[]) {0x13}, 1), TAG, "set VCOM");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xC0, (uint8_t[]) {0x2C}, 1), TAG, "set LCM control");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xC2, (uint8_t[]) {0x01}, 1), TAG, "set VDV/VRH enable");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xC3, (uint8_t[]) {0x10}, 1), TAG, "set VRH");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xC4, (uint8_t[]) {0x20}, 1), TAG, "set VDV");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xC6, (uint8_t[]) {0x0F}, 1), TAG, "set frame rate");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xD0, power_control_1, sizeof(power_control_1)), TAG, "set power control");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xD6, (uint8_t[]) {0xA1}, 1), TAG, "set power control 2");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xE0, gamma_positive, sizeof(gamma_positive)), TAG, "set positive gamma");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xE1, gamma_negative, sizeof(gamma_negative)), TAG, "set negative gamma");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0xE9, gate_control, sizeof(gate_control)), TAG, "set gate timing");
+    ESP_RETURN_ON_ERROR(lcd_send_command(panel_io, 0x21, NULL, 0), TAG, "enable display inversion");
+
+    return ESP_OK;
+}
 
 esp_err_t lcd_backlight_init(void)
 {
@@ -88,7 +121,7 @@ esp_err_t lcd_init(esp_lcd_panel_io_handle_t *panel_io, esp_lcd_panel_handle_t *
 
     const esp_lcd_panel_dev_config_t panel_config = {
         .reset_gpio_num = LCD_RESET,
-        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR,
+        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB,
         .bits_per_pixel = LCD_BITS_PER_PIXEL,
     };
 
@@ -98,9 +131,10 @@ esp_err_t lcd_init(esp_lcd_panel_io_handle_t *panel_io, esp_lcd_panel_handle_t *
         TAG,
         "create LCD IO handle"
     );
-    ESP_RETURN_ON_ERROR(esp_lcd_new_panel_ili9341(*panel_io, &panel_config, panel), TAG, "create LCD panel");
+    ESP_RETURN_ON_ERROR(esp_lcd_new_panel_st7789(*panel_io, &panel_config, panel), TAG, "create LCD panel");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_reset(*panel), TAG, "reset LCD panel");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_init(*panel), TAG, "initialize LCD panel");
+    ESP_RETURN_ON_ERROR(lcd_apply_vendor_st7789_init(*panel_io), TAG, "apply vendor ST7789 initialization");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_mirror(*panel, LCD_MIRROR_X, LCD_MIRROR_Y), TAG, "mirror LCD panel");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_disp_on_off(*panel, true), TAG, "enable LCD panel");
 

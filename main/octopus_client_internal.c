@@ -184,7 +184,50 @@ static bool parse_iso8601_utc(const char *text, time_t *timestamp)
     return false;
 }
 
+static bool parse_slot_entry(const cJSON *entry, tariff_slot_t *slot)
+{
+    double price_including_vat = 0.0;
+    const char *valid_from_text = NULL;
+    const char *valid_to_text = NULL;
+    time_t start_utc = 0;
+    time_t end_utc = 0;
+
+    if (!cJSON_IsObject((cJSON *)entry) || slot == NULL) {
+        return false;
+    }
+
+    valid_from_text = get_json_string_field(entry, "valid_from");
+    valid_to_text = get_json_string_field(entry, "valid_to");
+    if (!get_json_number_field(entry, "value_inc_vat", &price_including_vat) ||
+        valid_from_text == NULL ||
+        valid_to_text == NULL) {
+        return false;
+    }
+
+    if (!parse_iso8601_utc(valid_from_text, &start_utc) || !parse_iso8601_utc(valid_to_text, &end_utc)) {
+        return false;
+    }
+
+    *slot = (tariff_slot_t){
+        .start_utc = start_utc,
+        .end_utc = end_utc,
+        .start_local = start_utc,
+        .end_local = end_utc,
+        .price_including_vat = (float)price_including_vat,
+    };
+    return true;
+}
+
 void octopus_product_discovery_parser_init(octopus_product_discovery_parser_t *parser)
+{
+    if (parser == NULL) {
+        return;
+    }
+
+    memset(parser, 0, sizeof(*parser));
+}
+
+void octopus_tariff_stream_parser_init(octopus_tariff_stream_parser_t *parser)
 {
     if (parser == NULL) {
         return;
@@ -325,6 +368,121 @@ esp_err_t octopus_product_discovery_parser_feed(
     return ESP_OK;
 }
 
+esp_err_t octopus_tariff_stream_parser_feed(
+    octopus_tariff_stream_parser_t *parser,
+    const char *chunk,
+    size_t chunk_length,
+    tariff_slot_t *slots,
+    size_t max_slots,
+    size_t *slot_count,
+    bool *done
+)
+{
+    ESP_RETURN_ON_FALSE(
+        parser != NULL && chunk != NULL && slots != NULL && max_slots > 0 && slot_count != NULL && done != NULL,
+        ESP_ERR_INVALID_ARG,
+        TAG,
+        "tariff parser feed arguments required"
+    );
+
+    *done = false;
+
+    for (size_t index = 0; index < chunk_length; index++) {
+        char character = chunk[index];
+
+        if (!parser->in_results_array) {
+            if (parser->results_window_length + 1 < sizeof(parser->results_window)) {
+                parser->results_window[parser->results_window_length++] = character;
+            } else {
+                memmove(parser->results_window, parser->results_window + 1, sizeof(parser->results_window) - 2);
+                parser->results_window[sizeof(parser->results_window) - 2] = character;
+                parser->results_window_length = sizeof(parser->results_window) - 1;
+            }
+            parser->results_window[parser->results_window_length] = '\0';
+
+            if (strstr(parser->results_window, "\"results\":[") != NULL) {
+                parser->in_results_array = true;
+            }
+
+            continue;
+        }
+
+        if (!parser->capturing_object) {
+            if (character == '{') {
+                parser->capturing_object = true;
+                parser->object_length = 0;
+                parser->brace_depth = 0;
+                parser->in_string = false;
+                parser->escape_next = false;
+            } else if (character == ']') {
+                *slot_count = parser->parsed_count;
+                *done = true;
+                if (parser->skipped_count > 0) {
+                    ESP_LOGW(TAG, "Skipped %u malformed Octopus tariff rows", (unsigned int)parser->skipped_count);
+                }
+                return parser->parsed_count > 0 ? ESP_OK : ESP_ERR_NOT_FOUND;
+            } else {
+                continue;
+            }
+        }
+
+        if (parser->object_length + 1 >= sizeof(parser->object_buffer)) {
+            ESP_LOGW(TAG, "Tariff row exceeded %u bytes", (unsigned int)sizeof(parser->object_buffer));
+            return ESP_ERR_NO_MEM;
+        }
+
+        parser->object_buffer[parser->object_length++] = character;
+
+        if (parser->in_string) {
+            if (parser->escape_next) {
+                parser->escape_next = false;
+            } else if (character == '\\') {
+                parser->escape_next = true;
+            } else if (character == '"') {
+                parser->in_string = false;
+            }
+        } else {
+            if (character == '"') {
+                parser->in_string = true;
+            } else if (character == '{') {
+                parser->brace_depth++;
+            } else if (character == '}') {
+                parser->brace_depth--;
+                if (parser->brace_depth == 0) {
+                    cJSON *entry = NULL;
+                    tariff_slot_t slot = {0};
+
+                    parser->object_buffer[parser->object_length] = '\0';
+                    entry = parse_json_document(parser->object_buffer);
+                    if (entry == NULL) {
+                        return ESP_ERR_INVALID_RESPONSE;
+                    }
+
+                    if (parse_slot_entry(entry, &slot)) {
+                        if (parser->parsed_count >= max_slots) {
+                            cJSON_Delete(entry);
+                            ESP_LOGW(TAG, "Octopus tariff response exceeded slot capacity %u", (unsigned int)max_slots);
+                            return ESP_ERR_NO_MEM;
+                        }
+
+                        slots[parser->parsed_count++] = slot;
+                    } else {
+                        parser->skipped_count++;
+                    }
+
+                    cJSON_Delete(entry);
+                    parser->capturing_object = false;
+                    parser->object_length = 0;
+                    parser->object_buffer[0] = '\0';
+                }
+            }
+        }
+    }
+
+    *slot_count = parser->parsed_count;
+    return ESP_OK;
+}
+
 esp_err_t octopus_client_discover_active_product_code_from_response(const char *json_text, char *product_code, size_t product_code_size)
 {
     cJSON *root = NULL;
@@ -410,12 +568,6 @@ esp_err_t octopus_client_parse_slots_from_response(
     }
 
     cJSON_ArrayForEach(entry, results) {
-        double price_including_vat = 0.0;
-        const char *valid_from_text = NULL;
-        const char *valid_to_text = NULL;
-        time_t start_utc = 0;
-        time_t end_utc = 0;
-
         if (!cJSON_IsObject(entry)) {
             skipped_count++;
             continue;
@@ -426,27 +578,10 @@ esp_err_t octopus_client_parse_slots_from_response(
             break;
         }
 
-        valid_from_text = get_json_string_field(entry, "valid_from");
-        valid_to_text = get_json_string_field(entry, "valid_to");
-        if (!get_json_number_field(entry, "value_inc_vat", &price_including_vat) ||
-            valid_from_text == NULL ||
-            valid_to_text == NULL) {
+        if (!parse_slot_entry(entry, &slots[parsed_count])) {
             skipped_count++;
             continue;
         }
-
-        if (!parse_iso8601_utc(valid_from_text, &start_utc) || !parse_iso8601_utc(valid_to_text, &end_utc)) {
-            skipped_count++;
-            continue;
-        }
-
-        slots[parsed_count] = (tariff_slot_t){
-            .start_utc = start_utc,
-            .end_utc = end_utc,
-            .start_local = start_utc,
-            .end_local = end_utc,
-            .price_including_vat = (float)price_including_vat,
-        };
         parsed_count++;
     }
 

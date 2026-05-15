@@ -19,6 +19,7 @@
 #define WIFI_MANAGER_CONNECTED_BIT BIT0
 #define WIFI_MANAGER_FAILED_BIT BIT1
 #define WIFI_MANAGER_QUEUE_LENGTH 4
+#define WIFI_MANAGER_STACK_SIZE 8192
 #define WIFI_MANAGER_CONNECT_TIMEOUT_MS 45000
 #define WIFI_MANAGER_MAX_RETRIES 3
 
@@ -400,7 +401,15 @@ esp_err_t wifi_manager_init(app_state_t *state)
     s_command_queue = xQueueCreate(WIFI_MANAGER_QUEUE_LENGTH, sizeof(wifi_manager_command_t));
     ESP_RETURN_ON_FALSE(s_command_queue != NULL, ESP_ERR_NO_MEM, TAG, "create Wi-Fi command queue");
 
-    BaseType_t task_created = xTaskCreatePinnedToCore(wifi_manager_task, "wifi_manager", 4096, NULL, 5, NULL, tskNO_AFFINITY);
+    BaseType_t task_created = xTaskCreatePinnedToCore(
+        wifi_manager_task,
+        "wifi_manager",
+        WIFI_MANAGER_STACK_SIZE,
+        NULL,
+        5,
+        NULL,
+        tskNO_AFFINITY
+    );
     ESP_RETURN_ON_FALSE(task_created == pdPASS, ESP_ERR_NO_MEM, TAG, "create Wi-Fi task");
 
     return ESP_OK;

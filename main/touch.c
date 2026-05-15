@@ -75,23 +75,6 @@ esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
 {
     esp_lcd_panel_io_handle_t touch_io = NULL;
 
-    const spi_bus_config_t bus_config = {
-        .mosi_io_num = TOUCH_SPI_MOSI,
-        .miso_io_num = TOUCH_SPI_MISO,
-        .sclk_io_num = TOUCH_SPI_CLK,
-        .quadwp_io_num = GPIO_NUM_NC,
-        .quadhd_io_num = GPIO_NUM_NC,
-        .data4_io_num = GPIO_NUM_NC,
-        .data5_io_num = GPIO_NUM_NC,
-        .data6_io_num = GPIO_NUM_NC,
-        .data7_io_num = GPIO_NUM_NC,
-        .max_transfer_sz = 32768,
-        .flags = SPICOMMON_BUSFLAG_SCLK | SPICOMMON_BUSFLAG_MISO | SPICOMMON_BUSFLAG_MOSI |
-                 SPICOMMON_BUSFLAG_MASTER | SPICOMMON_BUSFLAG_GPIO_PINS,
-        .isr_cpu_id = ESP_INTR_CPU_AFFINITY_AUTO,
-        .intr_flags = ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_IRAM,
-    };
-
     const esp_lcd_panel_io_spi_config_t io_config = {
         .cs_gpio_num = TOUCH_CS,
         .dc_gpio_num = GPIO_NUM_NC,
@@ -126,7 +109,6 @@ esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
         },
     };
 
-    ESP_RETURN_ON_ERROR(spi_bus_initialize(TOUCH_SPI_HOST, &bus_config, SPI_DMA_CH_AUTO), TAG, "initialize touch SPI bus");
     ESP_RETURN_ON_ERROR(
         esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)TOUCH_SPI_HOST, &io_config, &touch_io),
         TAG,

@@ -21,6 +21,21 @@ static const char *KEY_TOUCH_X_OFFSET = "touch_xoff";
 static const char *KEY_TOUCH_YX = "touch_yx";
 static const char *KEY_TOUCH_YY = "touch_yy";
 static const char *KEY_TOUCH_Y_OFFSET = "touch_yoff";
+/*
+ * These defaults were captured from the IPistBit 3.2-inch board on /dev/ttyUSB0
+ * and are only intended as a first-boot fallback for that hardware profile.
+ * When board profiles land, the original 2.8-inch CYD should use its own
+ * board-specific default calibration instead of reusing these coefficients.
+ */
+static const app_touch_calibration_t DEFAULT_TOUCH_CALIBRATION = {
+    .valid = true,
+    .xx = 1075,
+    .xy = 15,
+    .x_offset = -15253,
+    .yx = 557,
+    .yy = 1161,
+    .y_offset = -44624,
+};
 
 static uint8_t clamp_brightness(uint8_t brightness_percent)
 {
@@ -91,6 +106,7 @@ void app_settings_set_defaults(app_settings_t *settings)
     memset(settings, 0, sizeof(*settings));
     memcpy(settings->region_code, "B", 2);
     settings->brightness_percent = APP_SETTINGS_DEFAULT_BRIGHTNESS_PERCENT;
+    settings->touch_calibration = DEFAULT_TOUCH_CALIBRATION;
 }
 
 esp_err_t app_settings_init(void)

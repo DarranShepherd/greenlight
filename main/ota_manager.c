@@ -25,6 +25,7 @@
 
 #define OTA_MANAGER_STACK_SIZE 12288
 #define OTA_MANAGER_MAX_HTTP_REQUEST_SIZE 4096
+#define OTA_MANAGER_DOWNLOAD_TIMEOUT_MS 60000
 #define OTA_MANAGER_HTTP_TX_BUFFER_BYTES 2048
 #define OTA_MANAGER_METADATA_URL_MAX_LEN 192
 #define OTA_MANAGER_METADATA_BUFFER_BYTES 2048
@@ -384,7 +385,7 @@ static esp_err_t perform_update_install(void)
     );
 
     http_config.url = s_last_metadata.firmware_url;
-    http_config.timeout_ms = 20000;
+    http_config.timeout_ms = OTA_MANAGER_DOWNLOAD_TIMEOUT_MS;
     http_config.cert_pem = OTA_MANAGER_CERT_PEM;
     http_config.buffer_size_tx = OTA_MANAGER_HTTP_TX_BUFFER_BYTES;
 

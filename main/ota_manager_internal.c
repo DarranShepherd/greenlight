@@ -106,6 +106,75 @@ static bool is_lower_hex_string(const char *text, size_t expected_length)
     return true;
 }
 
+static bool is_non_empty_string(const char *text)
+{
+    return text != NULL && text[0] != '\0';
+}
+
+static const cJSON *find_variant_metadata(const cJSON *variants, const char *board_id)
+{
+    if (!cJSON_IsObject((cJSON *)variants) || !is_non_empty_string(board_id)) {
+        return NULL;
+    }
+
+    return cJSON_GetObjectItemCaseSensitive((cJSON *)variants, board_id);
+}
+
+static bool validate_variant_metadata_map(const cJSON *variants)
+{
+    const cJSON *variant = NULL;
+
+    if (variants == NULL) {
+        return false;
+    }
+
+    if (!cJSON_IsObject(variants)) {
+        return false;
+    }
+
+    cJSON_ArrayForEach(variant, (cJSON *)variants) {
+        const char *firmware_url = NULL;
+        const char *sha256 = NULL;
+
+        if (!cJSON_IsObject(variant) || variant->string == NULL || variant->string[0] == '\0') {
+            return false;
+        }
+
+        firmware_url = get_json_string_field(variant, "firmware_url");
+        sha256 = get_json_string_field(variant, "sha256");
+        if (firmware_url == NULL || sha256 == NULL) {
+            return false;
+        }
+
+        if (!is_lower_hex_string(sha256, OTA_RELEASE_SHA256_TEXT_LEN - 1U)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ota_manager_release_metadata_is_selected_for_board(const ota_release_metadata_t *metadata, const char *board_id)
+{
+    if (metadata == NULL || !is_non_empty_string(board_id)) {
+        return false;
+    }
+
+    if (strcmp(metadata->board_id, board_id) != 0) {
+        return false;
+    }
+
+    if (!is_non_empty_string(metadata->version) || metadata->version_code == 0) {
+        return false;
+    }
+
+    if (!is_non_empty_string(metadata->firmware_url)) {
+        return false;
+    }
+
+    return is_lower_hex_string(metadata->sha256, OTA_RELEASE_SHA256_TEXT_LEN - 1U);
+}
+
 uint32_t ota_manager_version_code_from_string(const char *version_text)
 {
     uint32_t parts[3] = {0};
@@ -175,14 +244,21 @@ int ota_manager_compare_versions(
     return strcmp(current_version, candidate_version);
 }
 
-esp_err_t ota_manager_parse_release_metadata(const char *json_text, ota_release_metadata_t *metadata)
+esp_err_t ota_manager_parse_release_metadata(const char *json_text, const char *board_id, ota_release_metadata_t *metadata)
 {
     cJSON *root = NULL;
+    cJSON *variants = NULL;
+    const cJSON *selected_variant = NULL;
     const char *version = NULL;
     const char *firmware_url = NULL;
     const char *sha256 = NULL;
 
-    ESP_RETURN_ON_FALSE(json_text != NULL && metadata != NULL, ESP_ERR_INVALID_ARG, "ota_manager_internal", "metadata arguments required");
+    ESP_RETURN_ON_FALSE(
+        json_text != NULL && metadata != NULL && is_non_empty_string(board_id),
+        ESP_ERR_INVALID_ARG,
+        "ota_manager_internal",
+        "metadata arguments required"
+    );
 
     memset(metadata, 0, sizeof(*metadata));
 
@@ -190,10 +266,28 @@ esp_err_t ota_manager_parse_release_metadata(const char *json_text, ota_release_
     ESP_RETURN_ON_FALSE(root != NULL, ESP_ERR_INVALID_RESPONSE, "ota_manager_internal", "invalid OTA metadata JSON");
 
     version = get_json_string_field(root, "version");
-    firmware_url = get_json_string_field(root, "firmware_url");
-    sha256 = get_json_string_field(root, "sha256");
+    variants = cJSON_GetObjectItemCaseSensitive(root, "variants");
 
-    if (version == NULL || firmware_url == NULL || sha256 == NULL) {
+    if (version == NULL) {
+        cJSON_Delete(root);
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    if (!validate_variant_metadata_map(variants)) {
+        cJSON_Delete(root);
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    selected_variant = find_variant_metadata(variants, board_id);
+    if (!cJSON_IsObject((cJSON *)selected_variant)) {
+        cJSON_Delete(root);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    firmware_url = get_json_string_field(selected_variant, "firmware_url");
+    sha256 = get_json_string_field(selected_variant, "sha256");
+
+    if (firmware_url == NULL || sha256 == NULL) {
         cJSON_Delete(root);
         return ESP_ERR_INVALID_RESPONSE;
     }
@@ -208,6 +302,7 @@ esp_err_t ota_manager_parse_release_metadata(const char *json_text, ota_release_
     }
 
     strlcpy(metadata->version, version, sizeof(metadata->version));
+    strlcpy(metadata->board_id, board_id, sizeof(metadata->board_id));
     strlcpy(metadata->firmware_url, firmware_url, sizeof(metadata->firmware_url));
     strlcpy(metadata->sha256, sha256, sizeof(metadata->sha256));
     cJSON_Delete(root);

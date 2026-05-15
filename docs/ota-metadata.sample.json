@@ -1,0 +1,14 @@
+{
+  "version": "0.8.0",
+  "version_code": 800,
+  "variants": {
+    "cyd_28_2432s028r": {
+      "firmware_url": "https://github.com/DarranShepherd/greenlight/releases/download/v0.8.0/firmware-cyd28.bin",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "ipistbit_32_st7789": {
+      "firmware_url": "https://github.com/DarranShepherd/greenlight/releases/download/v0.8.0/firmware-ipistbit32.bin",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  }
+}

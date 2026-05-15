@@ -24,38 +24,42 @@ jobs:
         shell: bash
         run: |
           apt-get update
-          apt-get install --yes python3-pip
+          apt-get install --yes nodejs npm python3-cairosvg python3-pil
+          npm install --global lv_font_conv
 
       - name: Build firmware from tag
         shell: bash
         run: |
+          set -eu
           . /opt/esp/idf/export.sh
           VERSION="${GITHUB_REF_NAME#v}"
-          idf.py -DPROJECT_VER="${VERSION}" build
+          mkdir -p dist
+
+          PROJECT_VER="${VERSION}" sh tools/validate.sh firmware cyd_28_2432s028r
+          cp build-cyd_28_2432s028r/greenlight.bin dist/firmware-cyd28.bin
+
+          PROJECT_VER="${VERSION}" sh tools/validate.sh firmware ipistbit_32_st7789
+          cp build-ipistbit_32_st7789/greenlight.bin dist/firmware-ipistbit32.bin
 
       - name: Generate OTA metadata
         shell: bash
         run: |
           set -eu
           . /opt/esp/idf/export.sh
-          mkdir -p dist
-          cp build/greenlight.bin dist/firmware.bin
           VERSION="${GITHUB_REF_NAME#v}"
-          VERSION_CODE=$(python3 -c 'import os; parts = os.environ["VERSION"].split("."); parts += ["0"] * (3 - len(parts)); major, minor, patch = [int(part) for part in parts[:3]]; print(major * 10000 + minor * 100 + patch)')
-          SHA256=$(python3 -m esptool image-info dist/firmware.bin | awk '/Validation hash:/ {print $3}')
-          printf '{\n  "version": "%s",\n  "version_code": %s,\n  "firmware_url": "https://github.com/%s/releases/download/%s/firmware.bin",\n  "sha256": "%s"\n}\n' \
-            "${VERSION}" \
-            "${VERSION_CODE}" \
-            "${GITHUB_REPOSITORY}" \
-            "${GITHUB_REF_NAME}" \
-            "${SHA256}" > dist/metadata.json
-        env:
-          VERSION: ${{ github.ref_name }}
+          python3 tools/generate_release_metadata.py \
+            --version "${VERSION}" \
+            --tag "${GITHUB_REF_NAME}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --variant cyd_28_2432s028r=dist/firmware-cyd28.bin \
+            --variant ipistbit_32_st7789=dist/firmware-ipistbit32.bin \
+            --output dist/metadata.json
 
       - name: Publish GitHub Release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/firmware.bin
+            dist/firmware-cyd28.bin
+            dist/firmware-ipistbit32.bin
             dist/metadata.json
           overwrite_files: true

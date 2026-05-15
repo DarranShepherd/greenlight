@@ -18,6 +18,7 @@
 #include <esp_partition.h>
 #include <esp_system.h>
 
+#include "board_profile.h"
 #include "octopus_client.h"
 #include "ota_manager_internal.h"
 #include "wifi_manager.h"
@@ -110,6 +111,17 @@ static void initialize_current_version(void)
     app_state_set_firmware_info(s_state, version, ota_manager_version_code_from_string(version));
 }
 
+static const char *ota_manager_board_display_name(void)
+{
+    const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
+
+    if (board_profile == NULL || board_profile->display_name == NULL || board_profile->display_name[0] == '\0') {
+        return "this board";
+    }
+
+    return board_profile->display_name;
+}
+
 static esp_err_t perform_get_request(const char *url, char *response_buffer, size_t response_buffer_size)
 {
     ota_http_response_t response = {
@@ -192,8 +204,23 @@ static void build_metadata_url(char *buffer, size_t buffer_size)
     );
 }
 
+static esp_err_t validate_selected_metadata(const ota_release_metadata_t *metadata, const char *board_id)
+{
+    ESP_RETURN_ON_FALSE(
+        ota_manager_release_metadata_is_selected_for_board(metadata, board_id),
+        ESP_ERR_INVALID_STATE,
+        TAG,
+        "OTA metadata does not match board %s",
+        board_id != NULL ? board_id : "<null>"
+    );
+
+    return ESP_OK;
+}
+
 static esp_err_t perform_update_check(void)
 {
+    const char *board_id = greenlight_board_id_get();
+    const char *board_display_name = ota_manager_board_display_name();
     char current_version[APP_FIRMWARE_VERSION_TEXT_MAX_LEN] = {0};
     uint32_t current_version_code = 0;
     char metadata_url[OTA_MANAGER_METADATA_URL_MAX_LEN] = {0};
@@ -201,27 +228,45 @@ static esp_err_t perform_update_check(void)
     ota_release_metadata_t metadata = {0};
     esp_err_t err = ESP_OK;
     int version_compare = 0;
+    char status_text[APP_FIRMWARE_STATUS_TEXT_MAX_LEN] = {0};
 
     app_state_get_firmware_info(s_state, current_version, sizeof(current_version), &current_version_code);
 
     if (!wifi_manager_is_connected()) {
-        set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_IDLE, false, "", 0, 0, "Connect to Wi-Fi to check for firmware updates");
+        snprintf(status_text, sizeof(status_text), "Connect to Wi-Fi to check for %s updates", board_display_name);
+        set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_IDLE, false, "", 0, 0, status_text);
         return ESP_ERR_INVALID_STATE;
     }
 
     build_metadata_url(metadata_url, sizeof(metadata_url));
     octopus_client_release_memory();
-    set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_CHECKING, false, "", 0, 0, "Checking GitHub Releases for firmware updates");
+    ESP_LOGI(TAG, "Checking firmware updates for board %s", board_id);
+    snprintf(status_text, sizeof(status_text), "Checking GitHub Releases for a %s build", board_display_name);
+    set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_CHECKING, false, "", 0, 0, status_text);
 
     err = perform_get_request(metadata_url, metadata_json, sizeof(metadata_json));
     if (err != ESP_OK) {
-        set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, "", 0, 0, "Firmware update check failed");
+        snprintf(status_text, sizeof(status_text), "Firmware update check failed for %s", board_display_name);
+        set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, "", 0, 0, status_text);
         return err;
     }
 
-    err = ota_manager_parse_release_metadata(metadata_json, &metadata);
+    err = ota_manager_parse_release_metadata(metadata_json, board_id, &metadata);
     if (err != ESP_OK) {
-        set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, "", 0, 0, "Firmware metadata was invalid");
+        if (err == ESP_ERR_NOT_FOUND) {
+            snprintf(status_text, sizeof(status_text), "No compatible release artifact for %s was published", board_display_name);
+            set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, "", 0, 0, status_text);
+        } else {
+            snprintf(status_text, sizeof(status_text), "Release manifest is incompatible with %s", board_display_name);
+            set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, "", 0, 0, status_text);
+        }
+        return err;
+    }
+
+    err = validate_selected_metadata(&metadata, board_id);
+    if (err != ESP_OK) {
+        snprintf(status_text, sizeof(status_text), "Release manifest is incompatible with %s", board_display_name);
+        set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, "", 0, 0, status_text);
         return err;
     }
 
@@ -236,9 +281,7 @@ static esp_err_t perform_update_check(void)
     s_have_metadata = true;
 
     if (version_compare < 0) {
-        char status_text[APP_FIRMWARE_STATUS_TEXT_MAX_LEN] = {0};
-
-        snprintf(status_text, sizeof(status_text), "New firmware %s is available", metadata.version);
+        snprintf(status_text, sizeof(status_text), "Release %s is available for %s", metadata.version, board_display_name);
         set_firmware_status(
             APP_FIRMWARE_UPDATE_STATUS_AVAILABLE,
             true,
@@ -250,7 +293,8 @@ static esp_err_t perform_update_check(void)
         return ESP_OK;
     }
 
-    set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_UP_TO_DATE, false, metadata.version, metadata.version_code, 0, "Firmware is up to date");
+    snprintf(status_text, sizeof(status_text), "%s already has the latest compatible release (%s)", board_display_name, metadata.version);
+    set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_UP_TO_DATE, false, metadata.version, metadata.version_code, 0, status_text);
     return ESP_OK;
 }
 
@@ -289,6 +333,8 @@ static esp_err_t verify_partition_sha256(const esp_partition_t *partition, const
 
 static esp_err_t perform_update_install(void)
 {
+    const char *board_id = greenlight_board_id_get();
+    const char *board_display_name = ota_manager_board_display_name();
     const esp_partition_t *running_partition = esp_ota_get_running_partition();
     const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
     esp_http_client_config_t http_config = {0};
@@ -303,16 +349,31 @@ static esp_err_t perform_update_install(void)
     char status_text[APP_FIRMWARE_STATUS_TEXT_MAX_LEN] = {0};
 
     if (!wifi_manager_is_connected()) {
-        set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, s_last_metadata.version, s_last_metadata.version_code, 0, "Connect to Wi-Fi before updating firmware");
+        snprintf(status_text, sizeof(status_text), "Connect to Wi-Fi before updating %s", board_display_name);
+        set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, s_last_metadata.version, s_last_metadata.version_code, 0, status_text);
         return ESP_ERR_INVALID_STATE;
     }
 
     if (!s_have_metadata) {
-        set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, "", 0, 0, "Check for updates before starting OTA");
+        set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, "", 0, 0, "Check for a compatible release before starting OTA");
         return ESP_ERR_INVALID_STATE;
     }
 
-    snprintf(status_text, sizeof(status_text), "Downloading firmware %s", s_last_metadata.version);
+    err = validate_selected_metadata(&s_last_metadata, board_id);
+    if (err != ESP_OK) {
+        snprintf(status_text, sizeof(status_text), "Selected release is not compatible with %s", board_display_name);
+        set_firmware_status(
+            APP_FIRMWARE_UPDATE_STATUS_ERROR,
+            false,
+            "",
+            0,
+            0,
+            status_text
+        );
+        return err;
+    }
+
+    snprintf(status_text, sizeof(status_text), "Downloading %s for %s", s_last_metadata.version, board_display_name);
     set_firmware_status(
         APP_FIRMWARE_UPDATE_STATUS_DOWNLOADING,
         true,
@@ -364,8 +425,9 @@ static esp_err_t perform_update_install(void)
             snprintf(
                 status_text,
                 sizeof(status_text),
-                "Downloading firmware %s",
-                s_last_metadata.version
+                "Downloading %s for %s",
+                s_last_metadata.version,
+                board_display_name
             );
 
             set_firmware_status(
@@ -442,7 +504,7 @@ static esp_err_t perform_update_install(void)
         s_last_metadata.version,
         s_last_metadata.version_code,
         100,
-        "Validating downloaded firmware"
+        "Validating the downloaded board-specific firmware"
     );
 
     err = verify_partition_sha256(update_partition, s_last_metadata.sha256);
@@ -467,7 +529,7 @@ static esp_err_t perform_update_install(void)
         s_last_metadata.version,
         s_last_metadata.version_code,
         100,
-        "Firmware installed. Rebooting now"
+        "Board-specific firmware installed. Rebooting now"
     );
 
     vTaskDelay(pdMS_TO_TICKS(1200));

@@ -8,10 +8,16 @@ on:
 
 jobs:
   firmware-build:
-    name: Firmware Build
+    name: Firmware Build (${{ matrix.board }})
     runs-on: ubuntu-latest
     container:
       image: espressif/idf:v6.0
+    strategy:
+      fail-fast: false
+      matrix:
+        board:
+          - cyd_28_2432s028r
+          - ipistbit_32_st7789
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -27,7 +33,7 @@ jobs:
         shell: bash
         run: |
           . /opt/esp/idf/export.sh
-          sh tools/validate.sh firmware
+          sh tools/validate.sh firmware ${{ matrix.board }}
 
   host-tests:
     name: Host Tests

@@ -31,17 +31,19 @@ The detail screen shows the full daily shape of Agile pricing so it is easy to s
 
 ## Hardware
 
-Greenlight is built and tested on the common Cheap Yellow Display class board, typically sold as ESP32-2432S028R hardware.
+Greenlight currently supports two build-time Cheap Yellow Display profiles from the same repository:
 
-Tested target characteristics:
+- `cyd_28_2432s028r`: the original 2.8-inch CYD and the default developer build.
+- `ipistbit_32_st7789`: the iPistBit 3.2-inch CYD.
 
-- ESP32-based board
-- 2.8 inch 240x320 ILI9341 TFT
-- XPT2046 resistive touch controller
-- Integrated Wi-Fi
-- USB-powered standalone device format
+Both targets are ESP32-based boards with integrated Wi-Fi and a 240x320 touchscreen display. The selected build bakes in the matching board profile and OTA board ID through [main/Kconfig.projbuild](main/Kconfig.projbuild) and [main/board_profile.c](main/board_profile.c).
 
-The current firmware configuration matches the common CYD pinout defined in [main/hardware.h](main/hardware.h).
+Operationally, the easiest way to tell them apart is the screen size and seller branding:
+
+- `cyd_28_2432s028r`: original 2.8-inch CYD units.
+- `ipistbit_32_st7789`: iPistBit-branded 3.2-inch CYD units.
+
+If you are preparing a board for the first time, identify the hardware before flashing. Greenlight must receive the matching board-specific firmware over USB first so the installed image carries the correct board ID, display profile, touch defaults, and OTA compatibility rules from first boot onward.
 
 ## Software Stack
 
@@ -104,9 +106,26 @@ idf.py build
 idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
+To build an explicit board variant without changing the default workflow, use [docs/getting-started.md](docs/getting-started.md) and run `sh tools/validate.sh firmware cyd_28_2432s028r` or `sh tools/validate.sh firmware ipistbit_32_st7789`.
+
+For first-time device setup over USB, choose the build that matches the physical board:
+
+- 2.8-inch CYD: flash the `cyd_28_2432s028r` build.
+- iPistBit 3.2-inch CYD: flash the `ipistbit_32_st7789` build.
+
+That initial USB flash is required before relying on OTA. OTA now selects release assets by the board ID compiled into the running firmware, so a device must already be running the correct board-specific image before Settings can safely install later updates.
+
 The project is developed against ESP-IDF 6.0. The checked-in dev container is the easiest way to get a matching environment.
 
 Tagged releases also publish OTA update artifacts to GitHub Releases so deployed devices can check for and install newer firmware from Settings.
+
+Release artifacts are published with stable board-specific names:
+
+- `firmware-cyd28.bin`: 2.8-inch CYD release image.
+- `firmware-ipistbit32.bin`: iPistBit 3.2-inch CYD release image.
+- `metadata.json`: OTA manifest containing shared release fields plus per-board entries under `variants`.
+
+OTA is board-aware at runtime. The running device checks `metadata.json`, requires a `variants` object, selects `variants.<board_id>` for its compiled board, and refuses releases when `variants` or the matching board entry is missing. A sample manifest is checked in at [docs/ota-metadata.sample.json](docs/ota-metadata.sample.json).
 
 ## Contributing
 

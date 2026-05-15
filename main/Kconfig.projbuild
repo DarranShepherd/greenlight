@@ -1,5 +1,20 @@
 menu "Greenlight"
 
+choice GREENLIGHT_BOARD_PROFILE
+    prompt "Board profile"
+    default GREENLIGHT_BOARD_PROFILE_CYD_28_2432S028R
+    help
+        Select the currently targeted board profile. This remains a single build-time
+        selection and defaults to the existing 2.8-inch CYD behavior.
+
+config GREENLIGHT_BOARD_PROFILE_CYD_28_2432S028R
+    bool "CYD 2.8 2432S028R"
+
+config GREENLIGHT_BOARD_PROFILE_IPISTBIT_32_ST7789
+    bool "iPistBit 3.2 ST7789"
+
+endchoice
+
 config GREENLIGHT_GITHUB_OWNER
     string "GitHub OTA owner"
     default "DarranShepherd"

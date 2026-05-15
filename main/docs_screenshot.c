@@ -23,7 +23,7 @@
 #include <draw/lv_draw_private.h>
 
 #include "app_settings.h"
-#include "hardware.h"
+#include "board_profile.h"
 #include "tariff_model.h"
 #include "ui_router.h"
 
@@ -34,12 +34,12 @@ static const char *DOCS_WIFI_IP = "192.168.10.24";
 
 #define BASE64_CHUNK_BYTES 48U
 #define BASE64_ENCODED_CHUNK_BYTES ((((BASE64_CHUNK_BYTES) + 2U) / 3U) * 4U + 1U)
-#define DOCS_SNAPSHOT_WIDTH LCD_V_RES
+#define DOCS_SNAPSHOT_MAX_WIDTH 320U
 #define DOCS_SNAPSHOT_SLICE_HEIGHT 40U
 #define DOCS_SNAPSHOT_COLOR_FORMAT LV_COLOR_FORMAT_RGB565
 #define DOCS_SNAPSHOT_COLOR_FORMAT_NAME "RGB565"
 
-LV_DRAW_BUF_DEFINE_STATIC(s_docs_snapshot_draw_buf, DOCS_SNAPSHOT_WIDTH, DOCS_SNAPSHOT_SLICE_HEIGHT, DOCS_SNAPSHOT_COLOR_FORMAT);
+LV_DRAW_BUF_DEFINE_STATIC(s_docs_snapshot_draw_buf, DOCS_SNAPSHOT_MAX_WIDTH, DOCS_SNAPSHOT_SLICE_HEIGHT, DOCS_SNAPSHOT_COLOR_FORMAT);
 
 static bool s_docs_snapshot_draw_buf_initialized;
 
@@ -426,6 +426,7 @@ static lv_result_t render_snapshot_slice_locked(lv_obj_t *obj, const lv_area_t *
 
 static esp_err_t capture_screen(const char *name, app_screen_t screen)
 {
+    const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
     lv_obj_t *root = NULL;
     lv_area_t snapshot_area;
     int32_t width = 0;
@@ -457,6 +458,8 @@ static esp_err_t capture_screen(const char *name, app_screen_t screen)
     }
 
     ESP_RETURN_ON_FALSE(root != NULL && width > 0 && height > 0, ESP_ERR_INVALID_STATE, TAG, "resolve screenshot root");
+    ESP_RETURN_ON_FALSE((uint32_t)width <= board_profile->display.v_res, ESP_ERR_INVALID_SIZE, TAG, "snapshot width exceeds board profile");
+    ESP_RETURN_ON_FALSE((uint32_t)height <= board_profile->display.h_res, ESP_ERR_INVALID_SIZE, TAG, "snapshot height exceeds board profile");
     ESP_RETURN_ON_ERROR(stream_snapshot_begin(name, (uint32_t)width, (uint32_t)height, stride), TAG, "begin screenshot stream");
 
     for (int32_t y = 0; y < height; y += DOCS_SNAPSHOT_SLICE_HEIGHT) {
@@ -493,6 +496,7 @@ static esp_err_t capture_screen(const char *name, app_screen_t screen)
 
 esp_err_t docs_screenshot_run(app_state_t *state)
 {
+    const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
     time_t now_local = 0;
     primary_scenario_t primary_scenarios[3] = {0};
 
@@ -500,6 +504,7 @@ esp_err_t docs_screenshot_run(app_state_t *state)
         return ESP_ERR_INVALID_ARG;
     }
 
+    ESP_LOGI(TAG, "Running docs screenshots for board %s", board_profile->id);
     configure_docs_clock();
     now_local = docs_now_local();
 

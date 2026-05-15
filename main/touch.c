@@ -5,7 +5,7 @@
 #include <esp_lcd_touch_xpt2046.h>
 #include <string.h>
 
-#include "hardware.h"
+#include "board_profile.h"
 
 static const char *TAG = "touch";
 static app_touch_calibration_t s_touch_calibration;
@@ -73,12 +73,15 @@ void touch_set_calibration(const app_touch_calibration_t *calibration)
 
 esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
 {
+    const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
+    const greenlight_display_profile_t *display = &board_profile->display;
+    const greenlight_touch_profile_t *touch = &board_profile->touch;
     esp_lcd_panel_io_handle_t touch_io = NULL;
 
     const spi_bus_config_t bus_config = {
-        .mosi_io_num = TOUCH_SPI_MOSI,
-        .miso_io_num = TOUCH_SPI_MISO,
-        .sclk_io_num = TOUCH_SPI_CLK,
+        .mosi_io_num = touch->spi_mosi,
+        .miso_io_num = touch->spi_miso,
+        .sclk_io_num = touch->spi_clk,
         .quadwp_io_num = GPIO_NUM_NC,
         .quadhd_io_num = GPIO_NUM_NC,
         .data4_io_num = GPIO_NUM_NC,
@@ -93,10 +96,10 @@ esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
     };
 
     const esp_lcd_panel_io_spi_config_t io_config = {
-        .cs_gpio_num = TOUCH_CS,
+        .cs_gpio_num = touch->cs,
         .dc_gpio_num = GPIO_NUM_NC,
         .spi_mode = 0,
-        .pclk_hz = TOUCH_CLOCK_HZ,
+        .pclk_hz = touch->clock_hz,
         .trans_queue_depth = 3,
         .lcd_cmd_bits = 8,
         .lcd_param_bits = 8,
@@ -110,25 +113,27 @@ esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
     };
 
     const esp_lcd_touch_config_t touch_config = {
-        .x_max = LCD_H_RES,
-        .y_max = LCD_V_RES,
-        .rst_gpio_num = TOUCH_RST,
-        .int_gpio_num = TOUCH_IRQ,
+        .x_max = display->h_res,
+        .y_max = display->v_res,
+        .rst_gpio_num = touch->reset,
+        .int_gpio_num = touch->irq,
         .process_coordinates = touch_process_coordinates,
         .levels = {
             .reset = 0,
             .interrupt = 0,
         },
         .flags = {
-            .swap_xy = false,
-            .mirror_x = TOUCH_MIRROR_X,
-            .mirror_y = TOUCH_MIRROR_Y,
+            .swap_xy = touch->swap_xy,
+            .mirror_x = touch->mirror_x,
+            .mirror_y = touch->mirror_y,
         },
     };
 
-    ESP_RETURN_ON_ERROR(spi_bus_initialize(TOUCH_SPI_HOST, &bus_config, SPI_DMA_CH_AUTO), TAG, "initialize touch SPI bus");
+    if (touch->spi_host != display->spi_host) {
+        ESP_RETURN_ON_ERROR(spi_bus_initialize(touch->spi_host, &bus_config, SPI_DMA_CH_AUTO), TAG, "initialize touch SPI bus");
+    }
     ESP_RETURN_ON_ERROR(
-        esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)TOUCH_SPI_HOST, &io_config, &touch_io),
+        esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)touch->spi_host, &io_config, &touch_io),
         TAG,
         "create touch IO handle"
     );

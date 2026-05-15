@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "board_profile.h"
 #include "numeric_fonts.h"
 #include "ota_manager.h"
 #include "sync_controller.h"
@@ -62,6 +63,17 @@ static size_t get_region_option_index(const char *region_code)
 static const char *get_region_name(const char *region_code)
 {
     return s_region_options[get_region_option_index(region_code)].name;
+}
+
+static const char *get_board_display_name(void)
+{
+    const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
+
+    if (board_profile == NULL || board_profile->display_name == NULL || board_profile->display_name[0] == '\0') {
+        return "Unknown board";
+    }
+
+    return board_profile->display_name;
 }
 
 static void update_touch_calibration_status(const app_state_t *state, ui_router_view_t *view)
@@ -580,6 +592,7 @@ static void touch_calibration_overlay_event_cb(lv_event_t *event)
 
 void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
 {
+    const char *board_display_name = get_board_display_name();
     char clock_text[12] = {0};
 
     if (view->brightness_label != NULL) {
@@ -645,16 +658,21 @@ void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
     if (view->firmware_version_label != NULL) {
         lv_label_set_text_fmt(
             view->firmware_version_label,
-            "Firmware Version: %s",
+            "Board: %s\nInstalled: %s",
+            board_display_name,
             state->firmware_current_version[0] != '\0' ? state->firmware_current_version : "dev"
         );
     }
 
     if (view->firmware_available_label != NULL) {
-        if (state->firmware_update_available && state->firmware_available_version[0] != '\0') {
-            lv_label_set_text_fmt(view->firmware_available_label, "New Version Available: %s", state->firmware_available_version);
+        if (state->firmware_available_version[0] != '\0') {
+            lv_label_set_text_fmt(view->firmware_available_label, "Compatible release: %s", state->firmware_available_version);
+        } else if (state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_CHECKING) {
+            lv_label_set_text(view->firmware_available_label, "Compatible release: checking GitHub Releases");
+        } else if (state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_IDLE) {
+            lv_label_set_text(view->firmware_available_label, "Compatible release: not checked yet");
         } else {
-            lv_label_set_text(view->firmware_available_label, "");
+            lv_label_set_text(view->firmware_available_label, "Compatible release: unavailable");
         }
     }
 

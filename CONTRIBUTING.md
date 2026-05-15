@@ -31,6 +31,23 @@ If you only need one slice while iterating locally, the same script supports nar
 ```sh
 sh tools/validate.sh host
 sh tools/validate.sh firmware
+sh tools/validate.sh firmware ipistbit_32_st7789
 ```
+
+Firmware validation defaults to the original 2.8-inch CYD and writes board-specific outputs to `build-cyd_28_2432s028r/` or `build-ipistbit_32_st7789/`. CI builds both variants by calling the same entry point with each board key.
+
+When a change can affect board overlays, display/touch setup, OTA metadata, or release packaging, validate both firmware variants locally instead of only the default build:
+
+```sh
+sh tools/validate.sh firmware cyd_28_2432s028r
+sh tools/validate.sh firmware ipistbit_32_st7789
+```
+
+Those local outputs correspond to the release artifact names used by the tagged OTA workflow:
+
+- `build-cyd_28_2432s028r/greenlight.bin` -> `firmware-cyd28.bin`
+- `build-ipistbit_32_st7789/greenlight.bin` -> `firmware-ipistbit32.bin`
+
+Contributors testing real hardware should also keep the first-flash rule in mind: blank devices and boards being recovered over USB must receive the correct board-specific image over serial before OTA is considered a safe maintenance path.
 
 Use the repository's issue and pull request templates when opening public reports or contributions. For suspected vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of filing a public issue.

@@ -10,6 +10,7 @@
 
 #include "app_settings.h"
 #include "app_state.h"
+#include "board_profile.h"
 #include "docs_screenshot.h"
 #include "lcd.h"
 #include "ota_manager.h"
@@ -71,6 +72,7 @@ static void update_startup_stage(app_state_t *state, bool wifi_connected)
 
 void app_main(void)
 {
+    const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
     esp_lcd_panel_io_handle_t panel_io = NULL;
     esp_lcd_panel_handle_t panel = NULL;
 #if !CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
@@ -82,7 +84,7 @@ void app_main(void)
     bool was_wifi_connected = false;
     bool tariff_entry_released = false;
 
-    ESP_LOGI(TAG, "Starting Greenlight on CYD");
+    ESP_LOGI(TAG, "Starting Greenlight on %s (%s)", board_profile->display_name, board_profile->id);
 
     ESP_ERROR_CHECK(app_settings_init());
 #if CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE

@@ -21,6 +21,7 @@
 #define WIFI_MANAGER_QUEUE_LENGTH 4
 #define WIFI_MANAGER_CONNECT_TIMEOUT_MS 45000
 #define WIFI_MANAGER_MAX_RETRIES 3
+#define WIFI_MANAGER_TASK_STACK_SIZE 8192
 
 typedef enum {
     WIFI_MANAGER_COMMAND_SCAN = 0,
@@ -150,14 +151,8 @@ static void persist_connected_settings(const char *ssid, const char *psk)
 
 static void finish_scan_status(uint8_t result_count)
 {
-    app_state_t snapshot = {0};
-    char message[APP_WIFI_STATUS_TEXT_MAX_LEN] = {0};
-
-    app_state_get_snapshot(s_state, &snapshot);
-
     if (s_is_connected) {
-        snprintf(message, sizeof(message), "Connected to %s", snapshot.wifi_connected_ssid);
-        app_state_set_wifi_status(s_state, APP_WIFI_STATUS_CONNECTED, message);
+        // Keep the existing connected status instead of copying the full app state onto this task stack.
         return;
     }
 
@@ -166,6 +161,7 @@ static void finish_scan_status(uint8_t result_count)
         return;
     }
 
+    char message[APP_WIFI_STATUS_TEXT_MAX_LEN] = {0};
     snprintf(message, sizeof(message), "Found %u Wi-Fi network%s", (unsigned int)result_count, result_count == 1 ? "" : "s");
     app_state_set_wifi_status(s_state, APP_WIFI_STATUS_IDLE, message);
 }
@@ -400,7 +396,15 @@ esp_err_t wifi_manager_init(app_state_t *state)
     s_command_queue = xQueueCreate(WIFI_MANAGER_QUEUE_LENGTH, sizeof(wifi_manager_command_t));
     ESP_RETURN_ON_FALSE(s_command_queue != NULL, ESP_ERR_NO_MEM, TAG, "create Wi-Fi command queue");
 
-    BaseType_t task_created = xTaskCreatePinnedToCore(wifi_manager_task, "wifi_manager", 4096, NULL, 5, NULL, tskNO_AFFINITY);
+    BaseType_t task_created = xTaskCreatePinnedToCore(
+        wifi_manager_task,
+        "wifi_manager",
+        WIFI_MANAGER_TASK_STACK_SIZE,
+        NULL,
+        5,
+        NULL,
+        tskNO_AFFINITY
+    );
     ESP_RETURN_ON_FALSE(task_created == pdPASS, ESP_ERR_NO_MEM, TAG, "create Wi-Fi task");
 
     return ESP_OK;

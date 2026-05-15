@@ -245,11 +245,11 @@ static void apply_state_locked(const app_state_t *state)
     }
 
     if (s_view.startup_overlay != NULL) {
-        if (state->startup_stage == APP_STARTUP_STAGE_COMPLETE) {
-            lv_obj_add_flag(s_view.startup_overlay, LV_OBJ_FLAG_HIDDEN);
-        } else {
+        if (state->startup_stage == APP_STARTUP_STAGE_BOOTING) {
             lv_obj_clear_flag(s_view.startup_overlay, LV_OBJ_FLAG_HIDDEN);
             lv_obj_move_foreground(s_view.startup_overlay);
+        } else {
+            lv_obj_add_flag(s_view.startup_overlay, LV_OBJ_FLAG_HIDDEN);
         }
     }
 

@@ -507,6 +507,19 @@ static bool should_retry_requested_refresh(time_t now_local)
     return (s_last_attempt_time == 0) || ((now_local - s_last_attempt_time) >= SYNC_CONTROLLER_REFRESH_RETRY_SECONDS);
 }
 
+static bool should_attempt_refresh(time_t now_local)
+{
+    if (!s_has_successful_load) {
+        return (s_last_attempt_time == 0) || ((now_local - s_last_attempt_time) >= SYNC_CONTROLLER_REFRESH_RETRY_SECONDS);
+    }
+
+    if (s_loaded_today_key != tariff_model_get_local_day_key(now_local)) {
+        return true;
+    }
+
+    return should_fetch_tomorrow(now_local) || should_retry_requested_refresh(now_local);
+}
+
 static void sync_controller_task(void *arg)
 {
     (void)arg;
@@ -535,7 +548,7 @@ static void sync_controller_task(void *arg)
             continue;
         }
 
-        if (!s_has_successful_load || s_loaded_today_key != tariff_model_get_local_day_key(now_local) || should_fetch_tomorrow(now_local) || should_retry_requested_refresh(now_local)) {
+        if (should_attempt_refresh(now_local)) {
             esp_err_t refresh_err = refresh_tariffs(now_local);
             if (refresh_err != ESP_OK) {
                 ESP_LOGW(TAG, "Tariff refresh failed: %s", esp_err_to_name(refresh_err));
@@ -663,6 +676,11 @@ bool sync_controller_test_get_refresh_requested(void)
 bool sync_controller_test_get_has_successful_load(void)
 {
     return s_has_successful_load;
+}
+
+bool sync_controller_test_should_attempt_refresh(time_t now_local)
+{
+    return should_attempt_refresh(now_local);
 }
 
 const char *sync_controller_test_get_active_region_code(void)

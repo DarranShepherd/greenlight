@@ -230,6 +230,27 @@ static void test_region_switch_retry_commits_new_dataset_after_stale_failure(voi
     assert(state.tariff_current_price == 4.0f);
 }
 
+static void test_startup_failures_are_rate_limited_between_retries(void)
+{
+    app_settings_t settings = {0};
+    app_state_t state = {0};
+    time_t now_local = 1715688000;
+
+    setenv("TZ", "UTC", 1);
+    tzset();
+
+    reset_harness(&state, &settings, "B");
+
+    assert(sync_controller_test_should_attempt_refresh(now_local));
+
+    s_stub_fetch_result = ESP_FAIL;
+    assert(sync_controller_test_refresh_tariffs(now_local) == ESP_FAIL);
+
+    assert(!sync_controller_test_get_has_successful_load());
+    assert(!sync_controller_test_should_attempt_refresh(now_local + 29));
+    assert(sync_controller_test_should_attempt_refresh(now_local + 30));
+}
+
 static void test_partial_tomorrow_publication_populates_day_views_without_full_day_assumption(void)
 {
     app_settings_t settings = {0};
@@ -328,6 +349,7 @@ int main(void)
 {
     test_region_switch_failure_preserves_last_good_dataset();
     test_region_switch_retry_commits_new_dataset_after_stale_failure();
+    test_startup_failures_are_rate_limited_between_retries();
     test_partial_tomorrow_publication_populates_day_views_without_full_day_assumption();
     test_runtime_snapshot_rolls_forward_when_time_crosses_block_boundary();
     test_tariff_model_handles_london_spring_forward_day();

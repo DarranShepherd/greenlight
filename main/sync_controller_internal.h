@@ -18,6 +18,7 @@ void sync_controller_test_set_tariff_status(app_tariff_status_t status);
 const runtime_tariff_state_t *sync_controller_test_get_runtime_state(void);
 bool sync_controller_test_get_refresh_requested(void);
 bool sync_controller_test_get_has_successful_load(void);
+bool sync_controller_test_should_attempt_refresh(time_t now_local);
 const char *sync_controller_test_get_active_region_code(void);
 
 #endif

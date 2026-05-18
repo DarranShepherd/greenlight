@@ -284,11 +284,11 @@ static void set_primary_pulse_enabled(ui_router_view_t *view, bool enabled)
     lv_anim_start(&animation);
 }
 
-static void style_preview_card(lv_obj_t *card, lv_obj_t *time_label, lv_obj_t *band_label, lv_obj_t *price_label, tariff_band_t band, bool active)
+static void style_preview_card(lv_obj_t *card, lv_obj_t *time_label, lv_obj_t *band_label, tariff_band_t band, bool active)
 {
     primary_palette_t palette = {0};
 
-    if (card == NULL || time_label == NULL || band_label == NULL || price_label == NULL) {
+    if (card == NULL || time_label == NULL || band_label == NULL) {
         return;
     }
 
@@ -297,10 +297,9 @@ static void style_preview_card(lv_obj_t *card, lv_obj_t *time_label, lv_obj_t *b
     lv_obj_set_style_bg_color(card, active ? palette.hero_bg : lv_color_hex(0x1f2937), 0);
     lv_obj_set_style_text_color(time_label, active ? palette.hero_muted_text : lv_color_hex(0xcbd5e1), 0);
     lv_obj_set_style_text_color(band_label, active ? palette.hero_text : lv_color_white(), 0);
-    lv_obj_set_style_text_color(price_label, active ? palette.hero_muted_text : lv_color_hex(0x94a3b8), 0);
     lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_align(band_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(band_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(band_label, &lv_font_montserrat_20_numeric, 0);
 }
 
 lv_color_t ui_primary_get_band_fill_color(tariff_band_t band)
@@ -327,12 +326,10 @@ static void update_primary_preview(ui_router_view_t *view, uint8_t index, const 
         snprintf(numeric_text, sizeof(numeric_text), "%.1f", (double)preview->representative_price);
         lv_label_set_text(view->primary_preview_time_labels[index], time_text);
         lv_label_set_text(view->primary_preview_band_labels[index], numeric_text);
-        lv_label_set_text(view->primary_preview_price_labels[index], "");
         style_preview_card(
             view->primary_preview_cards[index],
             view->primary_preview_time_labels[index],
             view->primary_preview_band_labels[index],
-            view->primary_preview_price_labels[index],
             preview->band,
             true
         );
@@ -341,12 +338,10 @@ static void update_primary_preview(ui_router_view_t *view, uint8_t index, const 
 
     lv_label_set_text(view->primary_preview_time_labels[index], "Later");
     lv_label_set_text(view->primary_preview_band_labels[index], "--");
-    lv_label_set_text(view->primary_preview_price_labels[index], "");
     style_preview_card(
         view->primary_preview_cards[index],
         view->primary_preview_time_labels[index],
         view->primary_preview_band_labels[index],
-        view->primary_preview_price_labels[index],
         TARIFF_BAND_NORMAL,
         false
     );
@@ -616,17 +611,27 @@ void ui_primary_create(lv_obj_t *tile, ui_router_view_t *view)
         lv_obj_set_style_radius(view->primary_preview_cards[index], 12, 0);
         lv_obj_set_style_border_width(view->primary_preview_cards[index], 0, 0);
         lv_obj_set_style_pad_all(view->primary_preview_cards[index], 5, 0);
-        lv_obj_set_style_pad_row(view->primary_preview_cards[index], 0, 0);
+        lv_obj_set_style_pad_row(view->primary_preview_cards[index], 3, 0);
         lv_obj_set_layout(view->primary_preview_cards[index], LV_LAYOUT_FLEX);
         lv_obj_set_flex_flow(view->primary_preview_cards[index], LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(view->primary_preview_cards[index], LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_flex_align(view->primary_preview_cards[index], LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_clear_flag(view->primary_preview_cards[index], LV_OBJ_FLAG_SCROLLABLE);
 
         view->primary_preview_time_labels[index] = lv_label_create(view->primary_preview_cards[index]);
         lv_obj_set_width(view->primary_preview_time_labels[index], lv_pct(100));
-        view->primary_preview_band_labels[index] = lv_label_create(view->primary_preview_cards[index]);
+
+        view->primary_preview_value_containers[index] = lv_obj_create(view->primary_preview_cards[index]);
+        lv_obj_set_width(view->primary_preview_value_containers[index], lv_pct(100));
+        lv_obj_set_flex_grow(view->primary_preview_value_containers[index], 1);
+        lv_obj_set_style_bg_opa(view->primary_preview_value_containers[index], LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(view->primary_preview_value_containers[index], 0, 0);
+        lv_obj_set_style_pad_all(view->primary_preview_value_containers[index], 0, 0);
+        lv_obj_set_layout(view->primary_preview_value_containers[index], LV_LAYOUT_FLEX);
+        lv_obj_set_flex_flow(view->primary_preview_value_containers[index], LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(view->primary_preview_value_containers[index], LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_clear_flag(view->primary_preview_value_containers[index], LV_OBJ_FLAG_SCROLLABLE);
+
+        view->primary_preview_band_labels[index] = lv_label_create(view->primary_preview_value_containers[index]);
         lv_obj_set_width(view->primary_preview_band_labels[index], lv_pct(100));
-        view->primary_preview_price_labels[index] = lv_label_create(view->primary_preview_cards[index]);
-        lv_obj_set_width(view->primary_preview_price_labels[index], lv_pct(100));
     }
 }

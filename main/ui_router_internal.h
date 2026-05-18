@@ -36,9 +36,9 @@ typedef struct {
     lv_obj_t *primary_change_label;
     lv_obj_t *primary_section_label;
     lv_obj_t *primary_preview_cards[APP_TARIFF_PREVIEW_MAX];
+    lv_obj_t *primary_preview_value_containers[APP_TARIFF_PREVIEW_MAX];
     lv_obj_t *primary_preview_time_labels[APP_TARIFF_PREVIEW_MAX];
     lv_obj_t *primary_preview_band_labels[APP_TARIFF_PREVIEW_MAX];
-    lv_obj_t *primary_preview_price_labels[APP_TARIFF_PREVIEW_MAX];
     lv_obj_t *detail_status_label;
     lv_obj_t *detail_updated_label;
     lv_obj_t *detail_top_bar;

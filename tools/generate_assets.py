@@ -18,7 +18,7 @@ FONT_JOBS = (
     {
         "output": ROOT / "main" / "lv_font_montserrat_20_numeric.c",
         "size": 20,
-        "ranges": "0x25,0x30-0x39",
+        "ranges": "0x25,0x2E,0x30-0x39",
     },
     {
         "output": ROOT / "main" / "lv_font_montserrat_28_numeric.c",

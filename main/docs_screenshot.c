@@ -12,6 +12,7 @@
 #include <esp_check.h>
 #include <esp_log.h>
 #include <esp_lvgl_port.h>
+#include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <lvgl.h>
@@ -32,12 +33,13 @@ static const char *DOCS_TZ_POSIX = "GMT0BST,M3.5.0/1,M10.5.0/2";
 static const char *DOCS_WIFI_SSID = "Docs Demo Wi-Fi";
 static const char *DOCS_WIFI_IP = "192.168.10.24";
 
-#define BASE64_CHUNK_BYTES 48U
+#define BASE64_CHUNK_BYTES 192U
 #define BASE64_ENCODED_CHUNK_BYTES ((((BASE64_CHUNK_BYTES) + 2U) / 3U) * 4U + 1U)
 #define DOCS_SNAPSHOT_MAX_WIDTH 320U
 #define DOCS_SNAPSHOT_SLICE_HEIGHT 40U
 #define DOCS_SNAPSHOT_COLOR_FORMAT LV_COLOR_FORMAT_RGB565
 #define DOCS_SNAPSHOT_COLOR_FORMAT_NAME "RGB565"
+#define DOCS_SCREENSHOT_SETTLE_MS 750U
 
 LV_DRAW_BUF_DEFINE_STATIC(s_docs_snapshot_draw_buf, DOCS_SNAPSHOT_MAX_WIDTH, DOCS_SNAPSHOT_SLICE_HEIGHT, DOCS_SNAPSHOT_COLOR_FORMAT);
 
@@ -46,6 +48,7 @@ static bool s_docs_snapshot_draw_buf_initialized;
 typedef struct {
     const char *name;
     app_screen_t screen;
+    time_t capture_local_time;
     tariff_band_t band;
     float current_price;
     time_t current_block_end_local;
@@ -54,23 +57,35 @@ typedef struct {
     uint8_t preview_count;
 } primary_scenario_t;
 
-static void configure_docs_clock(void)
+static void configure_docs_timezone(void)
+
+{
+    setenv("TZ", DOCS_TZ_POSIX, 1);
+    tzset();
+}
+
+static time_t docs_make_local_time(int hour, int minute)
 {
     struct tm local_tm = {
         .tm_year = 2026 - 1900,
         .tm_mon = 4,
         .tm_mday = 14,
-        .tm_hour = 18,
-        .tm_min = 35,
+        .tm_hour = hour,
+        .tm_min = minute,
         .tm_sec = 0,
         .tm_isdst = 1,
     };
-    struct timeval tv = {0};
 
-    setenv("TZ", DOCS_TZ_POSIX, 1);
-    tzset();
+    return mktime(&local_tm);
+}
 
-    tv.tv_sec = mktime(&local_tm);
+static void configure_docs_clock(time_t local_time)
+{
+    struct timeval tv = {
+        .tv_sec = local_time,
+        .tv_usec = 0,
+    };
+
     settimeofday(&tv, NULL);
 }
 
@@ -129,15 +144,23 @@ static void fill_day_view(app_tariff_day_view_t *day_view, time_t day_start_loca
 
 static void apply_base_docs_state(app_state_t *state)
 {
+    char local_time_text[APP_TIME_LOCAL_TEXT_MAX_LEN] = {0};
+    time_t now_local = 0;
+    struct tm local_tm = {0};
+
     if (state == NULL) {
         return;
     }
+
+    now_local = docs_now_local();
+    localtime_r(&now_local, &local_tm);
+    strftime(local_time_text, sizeof(local_time_text), "%a %d %b %H:%M", &local_tm);
 
     app_state_set_wifi_saved_credentials(state, true);
     app_state_set_wifi_status(state, APP_WIFI_STATUS_CONNECTED, "Connected to Docs Demo Wi-Fi");
     app_state_set_wifi_connection(state, DOCS_WIFI_SSID, DOCS_WIFI_IP);
     app_state_set_time_status(state, APP_TIME_STATUS_VALID, true, "Time synchronized for Europe/London");
-    app_state_set_local_time_text(state, "Thu 14 May 18:35");
+    app_state_set_local_time_text(state, local_time_text);
     app_state_set_tariff_snapshot(
         state,
         "Documentation snapshot mode",
@@ -151,20 +174,20 @@ static void apply_base_docs_state(app_state_t *state)
 static void apply_primary_scenario(app_state_t *state, const primary_scenario_t *scenario)
 {
     static const float today_prices[APP_TARIFF_DAY_SLOT_MAX] = {
-        3.4f, 3.6f, 3.8f, 4.0f, 4.3f, 4.8f, 6.4f, 8.6f,
-        10.4f, 11.2f, 12.6f, 14.9f, 16.8f, 17.6f, 18.4f, 19.2f,
-        20.3f, 21.4f, 22.0f, 23.2f, 24.1f, 24.9f, 26.8f, 28.1f,
-        29.8f, 30.4f, 31.2f, 32.1f, 33.5f, 34.2f, 35.0f, 36.4f,
-        38.8f, 39.6f, 41.2f, 42.6f, 43.1f, 39.4f, 34.0f, 28.5f,
-        22.1f, 18.5f, 15.0f, 13.2f, 11.4f, 9.8f, 8.0f, 6.2f,
+        3.8f, 3.7f, 3.6f, 3.5f, 3.4f, 3.6f, 3.9f, 4.1f,
+        4.4f, 4.8f, 6.2f, 7.4f, 9.1f, 11.8f, 16.2f, 17.4f,
+        18.6f, 19.8f, 21.0f, 22.2f, 23.1f, 24.0f, 22.8f, 21.4f,
+        14.8f, 13.2f, 11.4f, 9.6f, 17.2f, 19.0f, 21.3f, 24.6f,
+        31.8f, 37.4f, 42.1f, 44.3f, 45.6f, 43.8f, 38.6f, 34.2f,
+        24.8f, 22.4f, 20.6f, 18.8f, 16.9f, 15.8f, 11.6f, 7.8f,
     };
     static const float tomorrow_prices[APP_TARIFF_DAY_SLOT_MAX] = {
-        6.2f, 6.0f, 5.8f, 5.6f, 5.5f, 5.4f, 6.0f, 7.2f,
-        9.4f, 11.2f, 13.0f, 14.8f, 16.6f, 17.2f, 18.1f, 19.8f,
-        21.0f, 22.6f, 23.4f, 24.8f, 26.4f, 28.2f, 29.4f, 30.8f,
-        31.6f, 32.5f, 33.2f, 34.0f, 35.8f, 36.2f, 36.6f, 37.1f,
-        35.4f, 32.0f, 28.8f, 25.4f, 22.0f, 19.6f, 17.0f, 15.2f,
-        13.8f, 12.4f, 11.0f, 10.2f, 9.6f, 8.9f, 8.2f, 7.4f,
+        4.2f, 4.0f, 3.9f, 3.8f, 3.7f, 3.9f, 4.3f, 4.7f,
+        5.4f, 6.6f, 8.4f, 10.8f, 15.8f, 17.0f, 18.2f, 19.4f,
+        20.2f, 21.4f, 22.6f, 23.4f, 24.1f, 23.6f, 22.4f, 21.2f,
+        13.6f, 12.8f, 11.2f, 10.4f, 16.8f, 18.9f, 22.0f, 24.4f,
+        30.6f, 36.8f, 41.4f, 43.6f, 44.8f, 42.6f, 37.8f, 33.4f,
+        24.2f, 21.8f, 19.6f, 18.0f, 16.2f, 14.6f, 10.8f, 7.2f,
     };
     app_tariff_day_view_t today = {0};
     app_tariff_day_view_t tomorrow = {0};
@@ -204,20 +227,20 @@ static void apply_primary_scenario(app_state_t *state, const primary_scenario_t 
 static void apply_detail_scenario(app_state_t *state)
 {
     static const float today_prices[APP_TARIFF_DAY_SLOT_MAX] = {
-        2.6f, 2.9f, 3.1f, 3.5f, 4.0f, 4.4f, 5.8f, 7.5f,
-        9.2f, 10.8f, 12.2f, 14.1f, 15.8f, 17.0f, 18.6f, 19.8f,
-        20.9f, 22.0f, 23.1f, 24.0f, 25.6f, 27.8f, 29.4f, 31.2f,
-        33.0f, 34.8f, 36.5f, 37.4f, 38.1f, 39.0f, 40.6f, 42.8f,
-        44.0f, 41.8f, 38.0f, 33.6f, 28.4f, 24.2f, 21.0f, 18.8f,
-        16.4f, 14.8f, 13.0f, 11.6f, 10.0f, 8.6f, 7.2f, 6.1f,
+        3.8f, 3.7f, 3.6f, 3.5f, 3.4f, 3.6f, 3.9f, 4.1f,
+        4.4f, 4.8f, 6.2f, 7.4f, 9.1f, 11.8f, 16.2f, 17.4f,
+        18.6f, 19.8f, 21.0f, 22.2f, 23.1f, 24.0f, 22.8f, 21.4f,
+        14.8f, 13.2f, 11.4f, 9.6f, 17.2f, 19.0f, 21.3f, 24.6f,
+        31.8f, 37.4f, 42.1f, 44.3f, 45.6f, 43.8f, 38.6f, 34.2f,
+        24.8f, 22.4f, 20.6f, 18.8f, 16.9f, 15.8f, 11.6f, 7.8f,
     };
     static const float tomorrow_prices[APP_TARIFF_DAY_SLOT_MAX] = {
-        7.0f, 6.8f, 6.5f, 6.4f, 6.3f, 6.1f, 6.8f, 8.2f,
-        10.0f, 12.0f, 13.8f, 15.2f, 16.8f, 18.0f, 19.0f, 20.4f,
-        21.8f, 23.0f, 24.2f, 25.0f, 25.8f, 26.4f, 27.2f, 28.6f,
-        29.0f, 30.2f, 31.5f, 32.8f, 33.6f, 34.0f, 34.4f, 35.0f,
-        33.8f, 31.6f, 28.8f, 25.6f, 22.4f, 19.8f, 17.6f, 16.0f,
-        14.8f, 13.6f, 12.2f, 11.6f, 10.8f, 9.8f, 8.8f, 8.0f,
+        4.2f, 4.0f, 3.9f, 3.8f, 3.7f, 3.9f, 4.3f, 4.7f,
+        5.4f, 6.6f, 8.4f, 10.8f, 15.8f, 17.0f, 18.2f, 19.4f,
+        20.2f, 21.4f, 22.6f, 23.4f, 24.1f, 23.6f, 22.4f, 21.2f,
+        13.6f, 12.8f, 11.2f, 10.4f, 16.8f, 18.9f, 22.0f, 24.4f,
+        30.6f, 36.8f, 41.4f, 43.6f, 44.8f, 42.6f, 37.8f, 33.4f,
+        24.2f, 21.8f, 19.6f, 18.0f, 16.2f, 14.6f, 10.8f, 7.2f,
     };
     app_tariff_preview_t previews[APP_TARIFF_PREVIEW_MAX] = {0};
     app_tariff_day_view_t today = {0};
@@ -239,22 +262,22 @@ static void apply_detail_scenario(app_state_t *state)
         .valid = true,
         .start_local = now_local + (25 * 60),
         .end_local = now_local + (55 * 60),
-        .representative_price = 28.6f,
-        .band = TARIFF_BAND_EXPENSIVE,
+        .representative_price = 45.6f,
+        .band = TARIFF_BAND_VERY_EXPENSIVE,
     };
     previews[1] = (app_tariff_preview_t){
         .valid = true,
         .start_local = now_local + (55 * 60),
         .end_local = now_local + (85 * 60),
-        .representative_price = 17.4f,
-        .band = TARIFF_BAND_NORMAL,
+        .representative_price = 38.6f,
+        .band = TARIFF_BAND_EXPENSIVE,
     };
     previews[2] = (app_tariff_preview_t){
         .valid = true,
         .start_local = now_local + (85 * 60),
         .end_local = now_local + (115 * 60),
-        .representative_price = 9.2f,
-        .band = TARIFF_BAND_CHEAP,
+        .representative_price = 24.8f,
+        .band = TARIFF_BAND_NORMAL,
     };
 
     apply_base_docs_state(state);
@@ -262,8 +285,8 @@ static void apply_detail_scenario(app_state_t *state)
     app_state_set_tariff_primary(
         state,
         true,
-        24.2f,
-        TARIFF_BAND_NORMAL,
+        44.3f,
+        TARIFF_BAND_VERY_EXPENSIVE,
         now_local + (25 * 60),
         now_local + (25 * 60),
         previews,
@@ -322,6 +345,7 @@ static esp_err_t stream_snapshot_data(size_t base_offset, const uint8_t *data, s
         for (int attempt = 0; attempt < 2; attempt++) {
             printf("GLSHOT DATA %zu %s\n", base_offset + offset, encoded_chunk);
             fflush(stdout);
+            esp_task_wdt_reset();
             vTaskDelay(pdMS_TO_TICKS(2));
         }
 
@@ -497,45 +521,45 @@ static esp_err_t capture_screen(const char *name, app_screen_t screen)
 esp_err_t docs_screenshot_run(app_state_t *state)
 {
     const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
-    time_t now_local = 0;
     primary_scenario_t primary_scenarios[3] = {0};
+    bool task_wdt_disabled = false;
 
     if (state == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     ESP_LOGI(TAG, "Running docs screenshots for board %s", board_profile->id);
-    configure_docs_clock();
-    now_local = docs_now_local();
+    configure_docs_timezone();
 
     primary_scenarios[0] = (primary_scenario_t){
         .name = "primary-super-cheap",
         .screen = APP_SCREEN_PRIMARY,
+        .capture_local_time = docs_make_local_time(4, 35),
         .band = TARIFF_BAND_SUPER_CHEAP,
-        .current_price = 3.8f,
-        .current_block_end_local = now_local + (25 * 60),
-        .next_block_start_local = now_local + (25 * 60),
+        .current_price = 4.8f,
+        .current_block_end_local = docs_make_local_time(5, 0),
+        .next_block_start_local = docs_make_local_time(5, 0),
         .previews = {
             {
                 .valid = true,
-                .start_local = now_local + (25 * 60),
-                .end_local = now_local + (55 * 60),
+                .start_local = docs_make_local_time(5, 0),
+                .end_local = docs_make_local_time(7, 0),
                 .representative_price = 8.6f,
                 .band = TARIFF_BAND_CHEAP,
             },
             {
                 .valid = true,
-                .start_local = now_local + (55 * 60),
-                .end_local = now_local + (85 * 60),
-                .representative_price = 19.2f,
+                .start_local = docs_make_local_time(7, 0),
+                .end_local = docs_make_local_time(12, 0),
+                .representative_price = 20.6f,
                 .band = TARIFF_BAND_NORMAL,
             },
             {
                 .valid = true,
-                .start_local = now_local + (85 * 60),
-                .end_local = now_local + (115 * 60),
-                .representative_price = 31.4f,
-                .band = TARIFF_BAND_EXPENSIVE,
+                .start_local = docs_make_local_time(12, 0),
+                .end_local = docs_make_local_time(14, 0),
+                .representative_price = 13.2f,
+                .band = TARIFF_BAND_CHEAP,
             },
         },
         .preview_count = APP_TARIFF_PREVIEW_MAX,
@@ -543,31 +567,32 @@ esp_err_t docs_screenshot_run(app_state_t *state)
     primary_scenarios[1] = (primary_scenario_t){
         .name = "primary-normal",
         .screen = APP_SCREEN_PRIMARY,
+        .capture_local_time = docs_make_local_time(15, 35),
         .band = TARIFF_BAND_NORMAL,
-        .current_price = 21.8f,
-        .current_block_end_local = now_local + (25 * 60),
-        .next_block_start_local = now_local + (25 * 60),
+        .current_price = 24.6f,
+        .current_block_end_local = docs_make_local_time(16, 0),
+        .next_block_start_local = docs_make_local_time(16, 0),
         .previews = {
             {
                 .valid = true,
-                .start_local = now_local + (25 * 60),
-                .end_local = now_local + (55 * 60),
-                .representative_price = 27.4f,
+                .start_local = docs_make_local_time(16, 0),
+                .end_local = docs_make_local_time(17, 0),
+                .representative_price = 34.6f,
                 .band = TARIFF_BAND_EXPENSIVE,
             },
             {
                 .valid = true,
-                .start_local = now_local + (55 * 60),
-                .end_local = now_local + (85 * 60),
-                .representative_price = 14.2f,
-                .band = TARIFF_BAND_CHEAP,
+                .start_local = docs_make_local_time(17, 0),
+                .end_local = docs_make_local_time(19, 0),
+                .representative_price = 43.9f,
+                .band = TARIFF_BAND_VERY_EXPENSIVE,
             },
             {
                 .valid = true,
-                .start_local = now_local + (85 * 60),
-                .end_local = now_local + (115 * 60),
-                .representative_price = 4.8f,
-                .band = TARIFF_BAND_SUPER_CHEAP,
+                .start_local = docs_make_local_time(19, 0),
+                .end_local = docs_make_local_time(20, 0),
+                .representative_price = 36.4f,
+                .band = TARIFF_BAND_EXPENSIVE,
             },
         },
         .preview_count = APP_TARIFF_PREVIEW_MAX,
@@ -575,30 +600,31 @@ esp_err_t docs_screenshot_run(app_state_t *state)
     primary_scenarios[2] = (primary_scenario_t){
         .name = "primary-very-expensive",
         .screen = APP_SCREEN_PRIMARY,
+        .capture_local_time = docs_make_local_time(17, 35),
         .band = TARIFF_BAND_VERY_EXPENSIVE,
-        .current_price = 43.6f,
-        .current_block_end_local = now_local + (25 * 60),
-        .next_block_start_local = now_local + (25 * 60),
+        .current_price = 44.3f,
+        .current_block_end_local = docs_make_local_time(19, 0),
+        .next_block_start_local = docs_make_local_time(19, 0),
         .previews = {
             {
                 .valid = true,
-                .start_local = now_local + (25 * 60),
-                .end_local = now_local + (55 * 60),
-                .representative_price = 36.2f,
+                .start_local = docs_make_local_time(19, 0),
+                .end_local = docs_make_local_time(20, 0),
+                .representative_price = 36.4f,
                 .band = TARIFF_BAND_EXPENSIVE,
             },
             {
                 .valid = true,
-                .start_local = now_local + (55 * 60),
-                .end_local = now_local + (85 * 60),
-                .representative_price = 21.0f,
+                .start_local = docs_make_local_time(20, 0),
+                .end_local = docs_make_local_time(23, 0),
+                .representative_price = 20.8f,
                 .band = TARIFF_BAND_NORMAL,
             },
             {
                 .valid = true,
-                .start_local = now_local + (85 * 60),
-                .end_local = now_local + (115 * 60),
-                .representative_price = 10.2f,
+                .start_local = docs_make_local_time(23, 0),
+                .end_local = docs_make_local_time(0, 0) + (24 * 60 * 60),
+                .representative_price = 9.7f,
                 .band = TARIFF_BAND_CHEAP,
             },
         },
@@ -607,16 +633,27 @@ esp_err_t docs_screenshot_run(app_state_t *state)
 
     ESP_LOGI(TAG, "Documentation screenshot mode active");
 
+    if (esp_task_wdt_status(NULL) == ESP_OK) {
+        ESP_RETURN_ON_ERROR(esp_task_wdt_delete(NULL), TAG, "unsubscribe main task from watchdog during screenshot export");
+        task_wdt_disabled = true;
+    }
+
     for (size_t index = 0; index < sizeof(primary_scenarios) / sizeof(primary_scenarios[0]); index++) {
+        configure_docs_clock(primary_scenarios[index].capture_local_time);
         apply_primary_scenario(state, &primary_scenarios[index]);
         ESP_RETURN_ON_ERROR(ui_router_update(state), TAG, "update primary screenshot scenario");
         ESP_RETURN_ON_ERROR(capture_screen(primary_scenarios[index].name, primary_scenarios[index].screen), TAG, "capture primary screenshot");
-        vTaskDelay(pdMS_TO_TICKS(80));
+        vTaskDelay(pdMS_TO_TICKS(DOCS_SCREENSHOT_SETTLE_MS));
     }
 
+    configure_docs_clock(docs_make_local_time(17, 35));
     apply_detail_scenario(state);
     ESP_RETURN_ON_ERROR(ui_router_update(state), TAG, "update detail screenshot scenario");
     ESP_RETURN_ON_ERROR(capture_screen("detail-daily-prices", APP_SCREEN_DETAIL), TAG, "capture detail screenshot");
+
+    if (task_wdt_disabled) {
+        ESP_RETURN_ON_ERROR(esp_task_wdt_add(NULL), TAG, "resubscribe main task to watchdog after screenshot export");
+    }
 
     ESP_LOGI(TAG, "Documentation screenshot export complete");
     return ESP_OK;

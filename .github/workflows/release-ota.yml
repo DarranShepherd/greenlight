@@ -35,11 +35,14 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p dist
 
-          PROJECT_VER="${VERSION}" sh tools/validate.sh firmware cyd_28_2432s028r
-          cp build-cyd_28_2432s028r/greenlight.bin dist/firmware-cyd28.bin
+          PROJECT_VER="${VERSION}" sh tools/validate.sh firmware esp32_2432s028_ili9341
+          cp build-esp32_2432s028_ili9341/greenlight.bin dist/firmware-esp32_2432s028_ili9341.bin
 
-          PROJECT_VER="${VERSION}" sh tools/validate.sh firmware ipistbit_32_st7789
-          cp build-ipistbit_32_st7789/greenlight.bin dist/firmware-ipistbit32.bin
+          PROJECT_VER="${VERSION}" sh tools/validate.sh firmware esp32_2432s028_st7789
+          cp build-esp32_2432s028_st7789/greenlight.bin dist/firmware-esp32_2432s028_st7789.bin
+
+          PROJECT_VER="${VERSION}" sh tools/validate.sh firmware esp32_32e_st7789
+          cp build-esp32_32e_st7789/greenlight.bin dist/firmware-esp32_32e_st7789.bin
 
       - name: Generate OTA metadata
         shell: bash
@@ -51,15 +54,17 @@ jobs:
             --version "${VERSION}" \
             --tag "${GITHUB_REF_NAME}" \
             --repository "${GITHUB_REPOSITORY}" \
-            --variant cyd_28_2432s028r=dist/firmware-cyd28.bin \
-            --variant ipistbit_32_st7789=dist/firmware-ipistbit32.bin \
+            --variant esp32_2432s028_ili9341=dist/firmware-esp32_2432s028_ili9341.bin \
+            --variant esp32_2432s028_st7789=dist/firmware-esp32_2432s028_st7789.bin \
+            --variant esp32_32e_st7789=dist/firmware-esp32_32e_st7789.bin \
             --output dist/metadata.json
 
       - name: Publish GitHub Release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/firmware-cyd28.bin
-            dist/firmware-ipistbit32.bin
+            dist/firmware-esp32_2432s028_ili9341.bin
+            dist/firmware-esp32_2432s028_st7789.bin
+            dist/firmware-esp32_32e_st7789.bin
             dist/metadata.json
           overwrite_files: true

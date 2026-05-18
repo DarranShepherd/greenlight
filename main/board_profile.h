@@ -42,6 +42,7 @@ typedef struct {
     bool backlight_output_invert;
     bool mirror_x;
     bool mirror_y;
+    bool swap_bytes;
     lcd_rgb_element_order_t rgb_ele_order;
     greenlight_lcd_controller_t controller;
     const greenlight_lcd_init_cmd_t *init_cmds;

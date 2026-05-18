@@ -31,17 +31,21 @@ The detail screen shows the full daily shape of Agile pricing so it is easy to s
 
 ## Hardware
 
-Greenlight currently supports two build-time Cheap Yellow Display profiles from the same repository:
+Greenlight currently supports three build-time Cheap Yellow Display profiles from the same repository:
 
-- `cyd_28_2432s028r`: the original 2.8-inch CYD and the default developer build.
-- `ipistbit_32_st7789`: the iPistBit 3.2-inch CYD.
+| Board ID | Hardware | Display | Source |
+| --- | --- | --- | --- |
+| `esp32_2432s028_ili9341` | Guition-branded `ESP32-2432S028` 2.8-inch board | ILI9341, XPT2046 | [AliExpress](https://www.aliexpress.com/item/1005004961285750.html) |
+| `esp32_2432s028_st7789` | Unbranded `ESP32-2432S028` 2.8-inch board | ST7789, XPT2046 | [Amazon UK](https://www.amazon.co.uk/dp/B0F24X83FC) |
+| `esp32_32e_st7789` | `3.2" LCD Display / ESP32-32E 240x320 / Reistance Touch` board | ST7789, XPT2046 | [AliExpress](https://www.aliexpress.com/item/1005008239809369.html) |
 
-Both targets are ESP32-based boards with integrated Wi-Fi and a 240x320 touchscreen display. The selected build bakes in the matching board profile and OTA board ID through [main/Kconfig.projbuild](main/Kconfig.projbuild) and [main/board_profile.c](main/board_profile.c).
+All three targets are ESP32-based boards with integrated Wi-Fi and a 240x320 touchscreen display. The selected build bakes in the matching board profile and OTA board ID through [main/Kconfig.projbuild](main/Kconfig.projbuild) and [main/board_profile.c](main/board_profile.c).
 
-Operationally, the easiest way to tell them apart is the screen size and seller branding:
+Operationally, the easiest way to tell them apart is the silkscreen family and LCD/controller pairing:
 
-- `cyd_28_2432s028r`: original 2.8-inch CYD units.
-- `ipistbit_32_st7789`: iPistBit-branded 3.2-inch CYD units.
+- `esp32_2432s028_ili9341`: 2.8-inch `ESP32-2432S028` boards using ILI9341.
+- `esp32_2432s028_st7789`: 2.8-inch `ESP32-2432S028` boards using ST7789.
+- `esp32_32e_st7789`: the distinct 3.2-inch `ESP32-32E` board family.
 
 If you are preparing a board for the first time, identify the hardware before flashing. Greenlight must receive the matching board-specific firmware over USB first so the installed image carries the correct board ID, display profile, touch defaults, and OTA compatibility rules from first boot onward.
 
@@ -106,12 +110,13 @@ idf.py build
 idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
-To build an explicit board variant without changing the default workflow, use [docs/getting-started.md](docs/getting-started.md) and run `sh tools/validate.sh firmware cyd_28_2432s028r` or `sh tools/validate.sh firmware ipistbit_32_st7789`.
+To build an explicit board variant without changing the default workflow, use [docs/getting-started.md](docs/getting-started.md) and run `sh tools/validate.sh firmware esp32_2432s028_ili9341`, `sh tools/validate.sh firmware esp32_2432s028_st7789`, or `sh tools/validate.sh firmware esp32_32e_st7789`.
 
 For first-time device setup over USB, choose the build that matches the physical board:
 
-- 2.8-inch CYD: flash the `cyd_28_2432s028r` build.
-- iPistBit 3.2-inch CYD: flash the `ipistbit_32_st7789` build.
+- Guition `ESP32-2432S028` 2.8-inch board: flash the `esp32_2432s028_ili9341` build.
+- Unbranded `ESP32-2432S028` 2.8-inch ST7789 board: flash the `esp32_2432s028_st7789` build.
+- `ESP32-32E` 3.2-inch board: flash the `esp32_32e_st7789` build.
 
 That initial USB flash is required before relying on OTA. OTA now selects release assets by the board ID compiled into the running firmware, so a device must already be running the correct board-specific image before Settings can safely install later updates.
 
@@ -121,8 +126,9 @@ Tagged releases also publish OTA update artifacts to GitHub Releases so deployed
 
 Release artifacts are published with stable board-specific names:
 
-- `firmware-cyd28.bin`: 2.8-inch CYD release image.
-- `firmware-ipistbit32.bin`: iPistBit 3.2-inch CYD release image.
+- `firmware-esp32_2432s028_ili9341.bin`: 2.8-inch `ESP32-2432S028` ILI9341 release image.
+- `firmware-esp32_2432s028_st7789.bin`: 2.8-inch `ESP32-2432S028` ST7789 release image.
+- `firmware-esp32_32e_st7789.bin`: 3.2-inch `ESP32-32E` ST7789 release image.
 - `metadata.json`: OTA manifest containing shared release fields plus per-board entries under `variants`.
 
 OTA is board-aware at runtime. The running device checks `metadata.json`, requires a `variants` object, selects `variants.<board_id>` for its compiled board, and refuses releases when `variants` or the matching board entry is missing. A sample manifest is checked in at [docs/ota-metadata.sample.json](docs/ota-metadata.sample.json).

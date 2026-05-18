@@ -27,7 +27,7 @@ static const char *KEY_TOUCH_YY = "touch_yy";
 static const char *KEY_TOUCH_Y_OFFSET = "touch_yoff";
 static const uint8_t TOUCH_CALIBRATION_STORAGE_VERSION = 2;
 
-static const app_touch_calibration_t s_cyd_28_2432s028r_touch_seed = {
+static const app_touch_calibration_t s_esp32_2432s028_ili9341_touch_seed = {
     .valid = true,
     .xx = 67,
     .xy = 0,
@@ -37,7 +37,7 @@ static const app_touch_calibration_t s_cyd_28_2432s028r_touch_seed = {
     .y_offset = -13574,
 };
 
-static const app_touch_calibration_t s_ipistbit_32_st7789_touch_seed = {
+static const app_touch_calibration_t s_esp32_32e_st7789_touch_seed = {
     .valid = true,
     .xx = 65,
     .xy = 0,
@@ -45,6 +45,16 @@ static const app_touch_calibration_t s_ipistbit_32_st7789_touch_seed = {
     .yx = 0,
     .yy = 89,
     .y_offset = -14482,
+};
+
+static const app_touch_calibration_t s_esp32_2432s028_st7789_touch_seed = {
+    .valid = true,
+    .xx = 66,
+    .xy = 0,
+    .x_offset = -14946,
+    .yx = 0,
+    .yy = 87,
+    .y_offset = -15139,
 };
 
 static uint8_t clamp_brightness(uint8_t brightness_percent)
@@ -101,11 +111,15 @@ static const app_touch_calibration_t *get_touch_calibration_seed(void)
 {
     const char *board_id = greenlight_board_id_get();
 
-    if (strcmp(board_id, "ipistbit_32_st7789") == 0) {
-        return &s_ipistbit_32_st7789_touch_seed;
+    if (strcmp(board_id, "esp32_32e_st7789") == 0) {
+        return &s_esp32_32e_st7789_touch_seed;
     }
 
-    return &s_cyd_28_2432s028r_touch_seed;
+    if (strcmp(board_id, "esp32_2432s028_st7789") == 0) {
+        return &s_esp32_2432s028_st7789_touch_seed;
+    }
+
+    return &s_esp32_2432s028_ili9341_touch_seed;
 }
 
 static esp_err_t load_touch_calibration_values(nvs_handle_t handle, app_touch_calibration_t *calibration)

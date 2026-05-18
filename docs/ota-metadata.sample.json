@@ -2,12 +2,16 @@
   "version": "0.8.0",
   "version_code": 800,
   "variants": {
-    "cyd_28_2432s028r": {
-      "firmware_url": "https://github.com/DarranShepherd/greenlight/releases/download/v0.8.0/firmware-cyd28.bin",
+    "esp32_2432s028_ili9341": {
+      "firmware_url": "https://github.com/DarranShepherd/greenlight/releases/download/v0.8.0/firmware-esp32_2432s028_ili9341.bin",
       "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
     },
-    "ipistbit_32_st7789": {
-      "firmware_url": "https://github.com/DarranShepherd/greenlight/releases/download/v0.8.0/firmware-ipistbit32.bin",
+    "esp32_2432s028_st7789": {
+      "firmware_url": "https://github.com/DarranShepherd/greenlight/releases/download/v0.8.0/firmware-esp32_2432s028_st7789.bin",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "esp32_32e_st7789": {
+      "firmware_url": "https://github.com/DarranShepherd/greenlight/releases/download/v0.8.0/firmware-esp32_32e_st7789.bin",
       "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
     }
   }

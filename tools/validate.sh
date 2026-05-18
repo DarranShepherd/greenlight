@@ -5,7 +5,7 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 FONT_PATH="$ROOT_DIR/managed_components/lvgl__lvgl/scripts/built_in_font/Montserrat-Medium.ttf"
 
-DEFAULT_BOARD=cyd_28_2432s028r
+DEFAULT_BOARD=esp32_2432s028_ili9341
 
 usage() {
         cat <<'EOF'
@@ -16,8 +16,9 @@ Usage: sh tools/validate.sh [all|host|firmware] [board]
     firmware  Regenerate checked-in assets, verify they are up to date, and build firmware.
 
 Boards:
-    cyd_28_2432s028r     Default 2.8-inch CYD build.
-    ipistbit_32_st7789   iPistBit 3.2-inch CYD build.
+    esp32_2432s028_ili9341      ESP32-2432S028 2.8-inch board with ILI9341 LCD.
+    esp32_2432s028_st7789       ESP32-2432S028 2.8-inch board with ST7789 LCD.
+    esp32_32e_st7789            ESP32-32E 3.2-inch board with ST7789 LCD.
 EOF
 }
 
@@ -59,15 +60,20 @@ resolve_board() {
     board=${1:-$DEFAULT_BOARD}
 
     case "$board" in
-        cyd_28_2432s028r)
-            BOARD_LABEL="CYD 2.8 2432S028R"
-            BOARD_BUILD_DIR="$ROOT_DIR/build-cyd_28_2432s028r"
-            BOARD_DEFAULTS_REL="sdkconfig.board-cyd_28_2432s028r.defaults"
+        esp32_2432s028_ili9341)
+            BOARD_LABEL="ESP32-2432S028 / ILI9341"
+            BOARD_BUILD_DIR="$ROOT_DIR/build-esp32_2432s028_ili9341"
+            BOARD_DEFAULTS_REL="sdkconfig.board-esp32_2432s028_ili9341.defaults"
             ;;
-        ipistbit_32_st7789)
-            BOARD_LABEL="iPistBit 3.2 ST7789"
-            BOARD_BUILD_DIR="$ROOT_DIR/build-ipistbit_32_st7789"
-            BOARD_DEFAULTS_REL="sdkconfig.board-ipistbit_32_st7789.defaults"
+        esp32_2432s028_st7789)
+            BOARD_LABEL="ESP32-2432S028 / ST7789"
+            BOARD_BUILD_DIR="$ROOT_DIR/build-esp32_2432s028_st7789"
+            BOARD_DEFAULTS_REL="sdkconfig.board-esp32_2432s028_st7789.defaults"
+            ;;
+        esp32_32e_st7789)
+            BOARD_LABEL="ESP32-32E / ST7789"
+            BOARD_BUILD_DIR="$ROOT_DIR/build-esp32_32e_st7789"
+            BOARD_DEFAULTS_REL="sdkconfig.board-esp32_32e_st7789.defaults"
             ;;
         -h|--help|help)
             usage

@@ -188,7 +188,7 @@ lv_display_t *lvgl_display_init(esp_lcd_panel_io_handle_t panel_io, esp_lcd_pane
         .flags = {
             .buff_dma = true,
             .buff_spiram = false,
-            .swap_bytes = true,
+            .swap_bytes = display->swap_bytes,
         },
     };
 

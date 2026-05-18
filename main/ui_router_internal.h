@@ -79,8 +79,13 @@ typedef struct {
     lv_obj_t *touch_calibration_overlay;
     lv_obj_t *touch_calibration_prompt;
     lv_obj_t *touch_calibration_target;
-    lv_point_t touch_calibration_samples[3];
+    lv_obj_t *touch_calibration_target_crosshair_h;
+    lv_obj_t *touch_calibration_target_crosshair_v;
+    lv_obj_t *touch_calibration_target_center_dot;
+    lv_point_t touch_calibration_samples[5];
+    lv_point_t touch_calibration_press_samples[16];
     app_touch_calibration_t previous_touch_calibration;
+    uint8_t touch_calibration_press_sample_count;
     uint8_t touch_calibration_step;
     char wifi_dropdown_cache[APP_WIFI_SCAN_MAX_RESULTS * (APP_SETTINGS_WIFI_SSID_MAX_LEN + 1) + 32];
     app_state_t *state;

@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -12,8 +13,17 @@
 #include "touch.h"
 #include "wifi_manager.h"
 
-#define TOUCH_CALIBRATION_POINT_COUNT 3
+#define TOUCH_CALIBRATION_POINT_COUNT 5
 #define TOUCH_CALIBRATION_TARGET_SIZE 36
+#define TOUCH_CALIBRATION_CROSSHAIR_LENGTH 24
+#define TOUCH_CALIBRATION_CROSSHAIR_THICKNESS 2
+#define TOUCH_CALIBRATION_CENTER_DOT_SIZE 6
+#define TOUCH_CALIBRATION_TARGET_IDLE_COLOR 0xf59e0b
+#define TOUCH_CALIBRATION_TARGET_ACTIVE_COLOR 0x16a34a
+#define TOUCH_CALIBRATION_PRESS_SAMPLE_CAPACITY 16
+#define TOUCH_CALIBRATION_MIN_PRESS_SAMPLES 6
+#define TOUCH_CALIBRATION_MAX_COMPONENT_ERROR_PX 18
+#define TOUCH_CALIBRATION_MAX_AVERAGE_ERROR_PX 14
 
 typedef struct {
     char code;
@@ -38,10 +48,14 @@ static const region_option_t s_region_options[] = {
 };
 
 static const char *s_touch_calibration_prompts[TOUCH_CALIBRATION_POINT_COUNT] = {
-    "Touch the upper-left target",
-    "Touch the upper-right target",
-    "Touch the lower-center target",
+    "Press and hold the upper-left target",
+    "Press and hold the upper-right target",
+    "Press and hold the center target",
+    "Press and hold the lower-left target",
+    "Press and hold the lower-right target",
 };
+
+static lv_point_t convert_display_point_to_touch_space(lv_point_t display_point);
 
 static size_t get_region_option_index(const char *region_code)
 {
@@ -134,15 +148,203 @@ static void apply_region_index(ui_router_view_t *view, size_t region_index)
     sync_controller_request_refresh();
 }
 
-static int64_t det3(
-    int32_t a11, int32_t a12, int32_t a13,
-    int32_t a21, int32_t a22, int32_t a23,
-    int32_t a31, int32_t a32, int32_t a33
+static void sort_i32_values(int32_t *values, size_t count)
+{
+    if (values == NULL) {
+        return;
+    }
+
+    for (size_t index = 1; index < count; index++) {
+        int32_t value = values[index];
+        size_t cursor = index;
+
+        while (cursor > 0 && values[cursor - 1] > value) {
+            values[cursor] = values[cursor - 1];
+            cursor--;
+        }
+
+        values[cursor] = value;
+    }
+}
+
+static bool solve_linear_system_3x3(double matrix[3][4], double solution[3])
+{
+    if (matrix == NULL || solution == NULL) {
+        return false;
+    }
+
+    for (size_t pivot = 0; pivot < 3; pivot++) {
+        size_t best_row = pivot;
+        double best_abs = matrix[pivot][pivot] >= 0.0 ? matrix[pivot][pivot] : -matrix[pivot][pivot];
+
+        for (size_t candidate = pivot + 1; candidate < 3; candidate++) {
+            double candidate_abs = matrix[candidate][pivot] >= 0.0 ? matrix[candidate][pivot] : -matrix[candidate][pivot];
+
+            if (candidate_abs > best_abs) {
+                best_abs = candidate_abs;
+                best_row = candidate;
+            }
+        }
+
+        if (best_abs < 1e-6) {
+            return false;
+        }
+
+        if (best_row != pivot) {
+            for (size_t column = pivot; column < 4; column++) {
+                double tmp = matrix[pivot][column];
+                matrix[pivot][column] = matrix[best_row][column];
+                matrix[best_row][column] = tmp;
+            }
+        }
+
+        {
+            double pivot_value = matrix[pivot][pivot];
+
+            for (size_t column = pivot; column < 4; column++) {
+                matrix[pivot][column] /= pivot_value;
+            }
+        }
+
+        for (size_t row = 0; row < 3; row++) {
+            if (row == pivot) {
+                continue;
+            }
+
+            double factor = matrix[row][pivot];
+
+            if (factor == 0.0) {
+                continue;
+            }
+
+            for (size_t column = pivot; column < 4; column++) {
+                matrix[row][column] -= factor * matrix[pivot][column];
+            }
+        }
+    }
+
+    solution[0] = matrix[0][3];
+    solution[1] = matrix[1][3];
+    solution[2] = matrix[2][3];
+    return true;
+}
+
+static bool fit_touch_calibration_axis(
+    const lv_point_t samples[TOUCH_CALIBRATION_POINT_COUNT],
+    const int32_t targets[TOUCH_CALIBRATION_POINT_COUNT],
+    double coefficients[3]
 )
 {
-    return (int64_t)a11 * ((int64_t)a22 * a33 - (int64_t)a23 * a32) -
-           (int64_t)a12 * ((int64_t)a21 * a33 - (int64_t)a23 * a31) +
-           (int64_t)a13 * ((int64_t)a21 * a32 - (int64_t)a22 * a31);
+    double sx = 0.0;
+    double sy = 0.0;
+    double sxx = 0.0;
+    double syy = 0.0;
+    double sxy = 0.0;
+    double st = 0.0;
+    double sxt = 0.0;
+    double syt = 0.0;
+    double matrix[3][4] = {{0}};
+
+    if (samples == NULL || targets == NULL || coefficients == NULL) {
+        return false;
+    }
+
+    for (size_t index = 0; index < TOUCH_CALIBRATION_POINT_COUNT; index++) {
+        double sample_x = samples[index].x;
+        double sample_y = samples[index].y;
+        double target = targets[index];
+
+        sx += sample_x;
+        sy += sample_y;
+        sxx += sample_x * sample_x;
+        syy += sample_y * sample_y;
+        sxy += sample_x * sample_y;
+        st += target;
+        sxt += sample_x * target;
+        syt += sample_y * target;
+    }
+
+    matrix[0][0] = sxx;
+    matrix[0][1] = sxy;
+    matrix[0][2] = sx;
+    matrix[0][3] = sxt;
+    matrix[1][0] = sxy;
+    matrix[1][1] = syy;
+    matrix[1][2] = sy;
+    matrix[1][3] = syt;
+    matrix[2][0] = sx;
+    matrix[2][1] = sy;
+    matrix[2][2] = TOUCH_CALIBRATION_POINT_COUNT;
+    matrix[2][3] = st;
+    return solve_linear_system_3x3(matrix, coefficients);
+}
+
+static void reset_touch_calibration_press_samples(ui_router_view_t *view)
+{
+    if (view == NULL) {
+        return;
+    }
+
+    view->touch_calibration_press_sample_count = 0;
+    memset(view->touch_calibration_press_samples, 0, sizeof(view->touch_calibration_press_samples));
+}
+
+static void capture_touch_calibration_press_sample(ui_router_view_t *view)
+{
+    int32_t raw_x = 0;
+    int32_t raw_y = 0;
+
+    if (view == NULL || view->touch_calibration_press_sample_count >= TOUCH_CALIBRATION_PRESS_SAMPLE_CAPACITY) {
+        return;
+    }
+
+    if (!touch_get_latest_raw_point(&raw_x, &raw_y)) {
+        return;
+    }
+
+    view->touch_calibration_press_samples[view->touch_calibration_press_sample_count].x = raw_x;
+    view->touch_calibration_press_samples[view->touch_calibration_press_sample_count].y = raw_y;
+    view->touch_calibration_press_sample_count++;
+}
+
+static bool finalize_touch_calibration_press_sample(ui_router_view_t *view, lv_point_t *sample)
+{
+    int32_t x_values[TOUCH_CALIBRATION_PRESS_SAMPLE_CAPACITY] = {0};
+    int32_t y_values[TOUCH_CALIBRATION_PRESS_SAMPLE_CAPACITY] = {0};
+    uint8_t count = 0;
+
+    if (view == NULL || sample == NULL) {
+        return false;
+    }
+
+    count = view->touch_calibration_press_sample_count;
+    if (count < TOUCH_CALIBRATION_MIN_PRESS_SAMPLES) {
+        return false;
+    }
+
+    for (uint8_t index = 0; index < count; index++) {
+        x_values[index] = view->touch_calibration_press_samples[index].x;
+        y_values[index] = view->touch_calibration_press_samples[index].y;
+    }
+
+    sort_i32_values(x_values, count);
+    sort_i32_values(y_values, count);
+    sample->x = x_values[count / 2];
+    sample->y = y_values[count / 2];
+    return true;
+}
+
+static void set_touch_calibration_target_active(ui_router_view_t *view, bool active)
+{
+    if (view == NULL || view->touch_calibration_target == NULL) {
+        return;
+    }
+
+    lv_obj_set_style_bg_color(
+        view->touch_calibration_target,
+        lv_color_hex(active ? TOUCH_CALIBRATION_TARGET_ACTIVE_COLOR : TOUCH_CALIBRATION_TARGET_IDLE_COLOR),
+        0
+    );
 }
 
 static lv_point_t convert_display_point_to_touch_space(lv_point_t display_point)
@@ -213,8 +415,16 @@ static lv_point_t get_touch_calibration_target_point(ui_router_view_t *view, uin
             point.y = overlay_coords.y1 + 36;
             break;
         case 2:
-        default:
             point.x = overlay_coords.x1 + (width / 2);
+            point.y = overlay_coords.y1 + (height / 2);
+            break;
+        case 3:
+            point.x = overlay_coords.x1 + 36;
+            point.y = overlay_coords.y1 + height - 56;
+            break;
+        case 4:
+        default:
+            point.x = overlay_coords.x1 + width - 36;
             point.y = overlay_coords.y1 + height - 56;
             break;
     }
@@ -229,7 +439,12 @@ static bool solve_touch_calibration(
 )
 {
     lv_point_t targets[TOUCH_CALIBRATION_POINT_COUNT] = {0};
-    int64_t determinant = 0;
+    int32_t x_targets[TOUCH_CALIBRATION_POINT_COUNT] = {0};
+    int32_t y_targets[TOUCH_CALIBRATION_POINT_COUNT] = {0};
+    double x_coefficients[3] = {0};
+    double y_coefficients[3] = {0};
+    int32_t total_error = 0;
+    int32_t max_component_error = 0;
 
     if (samples == NULL || calibration == NULL) {
         return false;
@@ -237,48 +452,62 @@ static bool solve_touch_calibration(
 
     for (uint8_t index = 0; index < TOUCH_CALIBRATION_POINT_COUNT; index++) {
         targets[index] = convert_display_point_to_touch_space(get_touch_calibration_target_point(view, index));
+        x_targets[index] = targets[index].x;
+        y_targets[index] = targets[index].y;
     }
 
-    determinant = det3(
-        samples[0].x, samples[0].y, 1,
-        samples[1].x, samples[1].y, 1,
-        samples[2].x, samples[2].y, 1
-    );
-
-    if (determinant == 0) {
+    if (!fit_touch_calibration_axis(samples, x_targets, x_coefficients) ||
+        !fit_touch_calibration_axis(samples, y_targets, y_coefficients)) {
         return false;
     }
 
-    calibration->xx = (int32_t)((APP_TOUCH_CALIBRATION_SCALE * det3(
-        targets[0].x, samples[0].y, 1,
-        targets[1].x, samples[1].y, 1,
-        targets[2].x, samples[2].y, 1
-    )) / determinant);
-    calibration->xy = (int32_t)((APP_TOUCH_CALIBRATION_SCALE * det3(
-        samples[0].x, targets[0].x, 1,
-        samples[1].x, targets[1].x, 1,
-        samples[2].x, targets[2].x, 1
-    )) / determinant);
-    calibration->x_offset = (int32_t)((APP_TOUCH_CALIBRATION_SCALE * det3(
-        samples[0].x, samples[0].y, targets[0].x,
-        samples[1].x, samples[1].y, targets[1].x,
-        samples[2].x, samples[2].y, targets[2].x
-    )) / determinant);
-    calibration->yx = (int32_t)((APP_TOUCH_CALIBRATION_SCALE * det3(
-        targets[0].y, samples[0].y, 1,
-        targets[1].y, samples[1].y, 1,
-        targets[2].y, samples[2].y, 1
-    )) / determinant);
-    calibration->yy = (int32_t)((APP_TOUCH_CALIBRATION_SCALE * det3(
-        samples[0].x, targets[0].y, 1,
-        samples[1].x, targets[1].y, 1,
-        samples[2].x, targets[2].y, 1
-    )) / determinant);
-    calibration->y_offset = (int32_t)((APP_TOUCH_CALIBRATION_SCALE * det3(
-        samples[0].x, samples[0].y, targets[0].y,
-        samples[1].x, samples[1].y, targets[1].y,
-        samples[2].x, samples[2].y, targets[2].y
-    )) / determinant);
+    calibration->xx = (int32_t)(x_coefficients[0] * APP_TOUCH_CALIBRATION_SCALE);
+    calibration->xy = (int32_t)(x_coefficients[1] * APP_TOUCH_CALIBRATION_SCALE);
+    calibration->x_offset = (int32_t)(x_coefficients[2] * APP_TOUCH_CALIBRATION_SCALE);
+    calibration->yx = (int32_t)(y_coefficients[0] * APP_TOUCH_CALIBRATION_SCALE);
+    calibration->yy = (int32_t)(y_coefficients[1] * APP_TOUCH_CALIBRATION_SCALE);
+    calibration->y_offset = (int32_t)(y_coefficients[2] * APP_TOUCH_CALIBRATION_SCALE);
+
+    for (uint8_t index = 0; index < TOUCH_CALIBRATION_POINT_COUNT; index++) {
+        int32_t predicted_x = (int32_t)(
+            ((int64_t)calibration->xx * samples[index].x +
+             (int64_t)calibration->xy * samples[index].y +
+             (int64_t)calibration->x_offset) /
+            APP_TOUCH_CALIBRATION_SCALE
+        );
+        int32_t predicted_y = (int32_t)(
+            ((int64_t)calibration->yx * samples[index].x +
+             (int64_t)calibration->yy * samples[index].y +
+             (int64_t)calibration->y_offset) /
+            APP_TOUCH_CALIBRATION_SCALE
+        );
+        int32_t x_error = predicted_x - targets[index].x;
+        int32_t y_error = predicted_y - targets[index].y;
+
+        if (x_error < 0) {
+            x_error = -x_error;
+        }
+
+        if (y_error < 0) {
+            y_error = -y_error;
+        }
+
+        if (x_error > max_component_error) {
+            max_component_error = x_error;
+        }
+
+        if (y_error > max_component_error) {
+            max_component_error = y_error;
+        }
+
+        total_error += x_error + y_error;
+    }
+
+    if (max_component_error > TOUCH_CALIBRATION_MAX_COMPONENT_ERROR_PX ||
+        total_error > (TOUCH_CALIBRATION_POINT_COUNT * TOUCH_CALIBRATION_MAX_AVERAGE_ERROR_PX)) {
+        return false;
+    }
+
     calibration->valid = true;
     return true;
 }
@@ -300,6 +529,7 @@ static void update_touch_calibration_overlay(ui_router_view_t *view)
     point = get_touch_calibration_target_point(view, view->touch_calibration_step);
     lv_obj_get_coords(view->touch_calibration_overlay, &overlay_coords);
     lv_label_set_text(view->touch_calibration_prompt, s_touch_calibration_prompts[view->touch_calibration_step]);
+    set_touch_calibration_target_active(view, false);
     lv_obj_set_pos(
         view->touch_calibration_target,
         point.x - overlay_coords.x1 - (TOUCH_CALIBRATION_TARGET_SIZE / 2),
@@ -526,9 +756,9 @@ static void touch_calibration_start_event_cb(lv_event_t *event)
 
     ui_router_hide_keyboard(view);
     view->previous_touch_calibration = settings.touch_calibration;
-    touch_set_calibration(NULL);
     view->touch_calibration_step = 0;
     memset(view->touch_calibration_samples, 0, sizeof(view->touch_calibration_samples));
+    reset_touch_calibration_press_samples(view);
     lv_obj_clear_flag(view->touch_calibration_overlay, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(view->touch_calibration_overlay);
     update_touch_calibration_overlay(view);
@@ -537,23 +767,43 @@ static void touch_calibration_start_event_cb(lv_event_t *event)
 static void touch_calibration_overlay_event_cb(lv_event_t *event)
 {
     app_settings_t settings = {0};
-    lv_indev_t *indev = NULL;
+    lv_event_code_t code = lv_event_get_code(event);
     lv_point_t point = {0};
     app_touch_calibration_t calibration = {0};
     ui_router_view_t *view = (ui_router_view_t *)lv_event_get_user_data(event);
 
-    if (lv_event_get_code(event) != LV_EVENT_CLICKED || view == NULL || view->touch_calibration_step >= TOUCH_CALIBRATION_POINT_COUNT) {
+    if (view == NULL || view->touch_calibration_step >= TOUCH_CALIBRATION_POINT_COUNT) {
         return;
     }
 
-    indev = lv_indev_active();
-    if (indev == NULL) {
+    if (code == LV_EVENT_PRESSED) {
+        reset_touch_calibration_press_samples(view);
+        set_touch_calibration_target_active(view, true);
+        capture_touch_calibration_press_sample(view);
         return;
     }
 
-    lv_indev_get_point(indev, &point);
-    view->touch_calibration_samples[view->touch_calibration_step] = convert_display_point_to_touch_space(point);
+    if (code == LV_EVENT_PRESSING) {
+        capture_touch_calibration_press_sample(view);
+        return;
+    }
+
+    if (code != LV_EVENT_RELEASED) {
+        return;
+    }
+
+    if (!finalize_touch_calibration_press_sample(view, &point)) {
+        reset_touch_calibration_press_samples(view);
+        set_touch_calibration_target_active(view, false);
+        app_state_set_wifi_status(view->state, APP_WIFI_STATUS_FAILED, "Hold the target steady, then try again");
+        update_touch_calibration_overlay(view);
+        return;
+    }
+
+    view->touch_calibration_samples[view->touch_calibration_step] = point;
     view->touch_calibration_step++;
+    reset_touch_calibration_press_samples(view);
+    set_touch_calibration_target_active(view, false);
 
     if (view->touch_calibration_step < TOUCH_CALIBRATION_POINT_COUNT) {
         update_touch_calibration_overlay(view);
@@ -1032,7 +1282,9 @@ void ui_settings_create(lv_obj_t *screen, lv_obj_t *tile, ui_router_view_t *view
     lv_obj_set_style_bg_opa(view->touch_calibration_overlay, LV_OPA_80, 0);
     lv_obj_set_style_border_width(view->touch_calibration_overlay, 0, 0);
     lv_obj_set_style_pad_all(view->touch_calibration_overlay, 0, 0);
-    lv_obj_add_event_cb(view->touch_calibration_overlay, touch_calibration_overlay_event_cb, LV_EVENT_CLICKED, view);
+    lv_obj_add_event_cb(view->touch_calibration_overlay, touch_calibration_overlay_event_cb, LV_EVENT_PRESSED, view);
+    lv_obj_add_event_cb(view->touch_calibration_overlay, touch_calibration_overlay_event_cb, LV_EVENT_PRESSING, view);
+    lv_obj_add_event_cb(view->touch_calibration_overlay, touch_calibration_overlay_event_cb, LV_EVENT_RELEASED, view);
     lv_obj_add_flag(view->touch_calibration_overlay, LV_OBJ_FLAG_HIDDEN);
 
     view->touch_calibration_prompt = lv_label_create(view->touch_calibration_overlay);
@@ -1044,9 +1296,49 @@ void ui_settings_create(lv_obj_t *screen, lv_obj_t *tile, ui_router_view_t *view
     view->touch_calibration_target = lv_obj_create(view->touch_calibration_overlay);
     lv_obj_set_size(view->touch_calibration_target, TOUCH_CALIBRATION_TARGET_SIZE, TOUCH_CALIBRATION_TARGET_SIZE);
     lv_obj_set_style_radius(view->touch_calibration_target, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(view->touch_calibration_target, lv_color_hex(0xf59e0b), 0);
+    lv_obj_set_style_bg_color(view->touch_calibration_target, lv_color_hex(TOUCH_CALIBRATION_TARGET_IDLE_COLOR), 0);
     lv_obj_set_style_bg_opa(view->touch_calibration_target, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(view->touch_calibration_target, 3, 0);
     lv_obj_set_style_border_color(view->touch_calibration_target, lv_color_white(), 0);
     lv_obj_remove_flag(view->touch_calibration_target, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+
+    view->touch_calibration_target_crosshair_h = lv_obj_create(view->touch_calibration_target);
+    lv_obj_set_size(
+        view->touch_calibration_target_crosshair_h,
+        TOUCH_CALIBRATION_CROSSHAIR_LENGTH,
+        TOUCH_CALIBRATION_CROSSHAIR_THICKNESS
+    );
+    lv_obj_set_style_radius(view->touch_calibration_target_crosshair_h, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(view->touch_calibration_target_crosshair_h, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(view->touch_calibration_target_crosshair_h, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(view->touch_calibration_target_crosshair_h, 0, 0);
+    lv_obj_remove_flag(view->touch_calibration_target_crosshair_h, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(view->touch_calibration_target_crosshair_h);
+
+    view->touch_calibration_target_crosshair_v = lv_obj_create(view->touch_calibration_target);
+    lv_obj_set_size(
+        view->touch_calibration_target_crosshair_v,
+        TOUCH_CALIBRATION_CROSSHAIR_THICKNESS,
+        TOUCH_CALIBRATION_CROSSHAIR_LENGTH
+    );
+    lv_obj_set_style_radius(view->touch_calibration_target_crosshair_v, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(view->touch_calibration_target_crosshair_v, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(view->touch_calibration_target_crosshair_v, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(view->touch_calibration_target_crosshair_v, 0, 0);
+    lv_obj_remove_flag(view->touch_calibration_target_crosshair_v, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(view->touch_calibration_target_crosshair_v);
+
+    view->touch_calibration_target_center_dot = lv_obj_create(view->touch_calibration_target);
+    lv_obj_set_size(
+        view->touch_calibration_target_center_dot,
+        TOUCH_CALIBRATION_CENTER_DOT_SIZE,
+        TOUCH_CALIBRATION_CENTER_DOT_SIZE
+    );
+    lv_obj_set_style_radius(view->touch_calibration_target_center_dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(view->touch_calibration_target_center_dot, lv_color_hex(0x111827), 0);
+    lv_obj_set_style_bg_opa(view->touch_calibration_target_center_dot, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(view->touch_calibration_target_center_dot, 1, 0);
+    lv_obj_set_style_border_color(view->touch_calibration_target_center_dot, lv_color_white(), 0);
+    lv_obj_remove_flag(view->touch_calibration_target_center_dot, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(view->touch_calibration_target_center_dot);
 }

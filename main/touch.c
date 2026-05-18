@@ -8,7 +8,42 @@
 #include "board_profile.h"
 
 static const char *TAG = "touch";
+static const int32_t TOUCH_RAW_COORDINATE_MAX = 4095;
 static app_touch_calibration_t s_touch_calibration;
+static greenlight_touch_profile_t s_touch_profile;
+static int32_t s_last_raw_x;
+static int32_t s_last_raw_y;
+static bool s_has_last_raw_point;
+
+static void touch_apply_orientation(int32_t *x, int32_t *y)
+{
+    int32_t adjusted_x = 0;
+    int32_t adjusted_y = 0;
+
+    if (x == NULL || y == NULL) {
+        return;
+    }
+
+    adjusted_x = *x;
+    adjusted_y = *y;
+
+    if (s_touch_profile.mirror_x) {
+        adjusted_x = TOUCH_RAW_COORDINATE_MAX - adjusted_x;
+    }
+
+    if (s_touch_profile.mirror_y) {
+        adjusted_y = TOUCH_RAW_COORDINATE_MAX - adjusted_y;
+    }
+
+    if (s_touch_profile.swap_xy) {
+        int32_t tmp = adjusted_x;
+        adjusted_x = adjusted_y;
+        adjusted_y = tmp;
+    }
+
+    *x = adjusted_x;
+    *y = adjusted_y;
+}
 
 static void touch_process_coordinates(
     esp_lcd_touch_handle_t tp,
@@ -26,22 +61,32 @@ static void touch_process_coordinates(
     }
 
     for (uint8_t index = 0; index < *point_num && index < max_point_num; index++) {
-        int32_t adjusted_x = (int32_t)x[index];
-        int32_t adjusted_y = (int32_t)y[index];
+        int32_t raw_x = (int32_t)x[index];
+        int32_t raw_y = (int32_t)y[index];
+        int32_t adjusted_x = 0;
+        int32_t adjusted_y = 0;
+
+        touch_apply_orientation(&raw_x, &raw_y);
+        s_last_raw_x = raw_x;
+        s_last_raw_y = raw_y;
+        s_has_last_raw_point = true;
 
         if (s_touch_calibration.valid) {
             adjusted_x = (int32_t)(
-                ((int64_t)s_touch_calibration.xx * x[index] +
-                 (int64_t)s_touch_calibration.xy * y[index] +
+                ((int64_t)s_touch_calibration.xx * raw_x +
+                 (int64_t)s_touch_calibration.xy * raw_y +
                  (int64_t)s_touch_calibration.x_offset) /
                 APP_TOUCH_CALIBRATION_SCALE
             );
             adjusted_y = (int32_t)(
-                ((int64_t)s_touch_calibration.yx * x[index] +
-                 (int64_t)s_touch_calibration.yy * y[index] +
+                ((int64_t)s_touch_calibration.yx * raw_x +
+                 (int64_t)s_touch_calibration.yy * raw_y +
                  (int64_t)s_touch_calibration.y_offset) /
                 APP_TOUCH_CALIBRATION_SCALE
             );
+        } else {
+            adjusted_x = (raw_x * (tp->config.x_max - 1)) / TOUCH_RAW_COORDINATE_MAX;
+            adjusted_y = (raw_y * (tp->config.y_max - 1)) / TOUCH_RAW_COORDINATE_MAX;
         }
 
         if (adjusted_x < 0) {
@@ -61,6 +106,17 @@ static void touch_process_coordinates(
     }
 }
 
+bool touch_get_latest_raw_point(int32_t *x, int32_t *y)
+{
+    if (!s_has_last_raw_point || x == NULL || y == NULL) {
+        return false;
+    }
+
+    *x = s_last_raw_x;
+    *y = s_last_raw_y;
+    return true;
+}
+
 void touch_set_calibration(const app_touch_calibration_t *calibration)
 {
     if (calibration == NULL) {
@@ -77,6 +133,9 @@ esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
     const greenlight_display_profile_t *display = &board_profile->display;
     const greenlight_touch_profile_t *touch = &board_profile->touch;
     esp_lcd_panel_io_handle_t touch_io = NULL;
+
+    s_touch_profile = *touch;
+    s_has_last_raw_point = false;
 
     const spi_bus_config_t bus_config = {
         .mosi_io_num = touch->spi_mosi,
@@ -123,9 +182,9 @@ esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
             .interrupt = 0,
         },
         .flags = {
-            .swap_xy = touch->swap_xy,
-            .mirror_x = touch->mirror_x,
-            .mirror_y = touch->mirror_y,
+            .swap_xy = false,
+            .mirror_x = false,
+            .mirror_y = false,
         },
     };
 

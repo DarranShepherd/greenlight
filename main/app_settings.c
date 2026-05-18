@@ -17,6 +17,7 @@ static const char *KEY_WIFI_PSK = "wifi_psk";
 static const char *KEY_REGION_CODE = "region";
 static const char *KEY_BRIGHTNESS = "brightness";
 static const char *KEY_TOUCH_CAL_BOARD = "touch_board";
+static const char *KEY_TOUCH_CAL_VERSION = "touch_ver";
 static const char *KEY_TOUCH_CAL_VALID = "touch_cal_ok";
 static const char *KEY_TOUCH_XX = "touch_xx";
 static const char *KEY_TOUCH_XY = "touch_xy";
@@ -24,25 +25,26 @@ static const char *KEY_TOUCH_X_OFFSET = "touch_xoff";
 static const char *KEY_TOUCH_YX = "touch_yx";
 static const char *KEY_TOUCH_YY = "touch_yy";
 static const char *KEY_TOUCH_Y_OFFSET = "touch_yoff";
+static const uint8_t TOUCH_CALIBRATION_STORAGE_VERSION = 2;
 
 static const app_touch_calibration_t s_cyd_28_2432s028r_touch_seed = {
     .valid = true,
-    .xx = 1165,
+    .xx = 67,
     .xy = 0,
-    .x_offset = -21102,
-    .yx = 4,
-    .yy = 1142,
-    .y_offset = -13220,
+    .x_offset = -17078,
+    .yx = 0,
+    .yy = 89,
+    .y_offset = -13574,
 };
 
 static const app_touch_calibration_t s_ipistbit_32_st7789_touch_seed = {
     .valid = true,
-    .xx = 1075,
-    .xy = 15,
-    .x_offset = -15253,
-    .yx = 557,
-    .yy = 1161,
-    .y_offset = -44624,
+    .xx = 65,
+    .xy = 0,
+    .x_offset = -15053,
+    .yx = 0,
+    .yy = 89,
+    .y_offset = -14482,
 };
 
 static uint8_t clamp_brightness(uint8_t brightness_percent)
@@ -106,11 +108,6 @@ static const app_touch_calibration_t *get_touch_calibration_seed(void)
     return &s_cyd_28_2432s028r_touch_seed;
 }
 
-static bool is_legacy_touch_calibration_board(const char *board_id)
-{
-    return strcmp(board_id, "cyd_28_2432s028r") == 0;
-}
-
 static esp_err_t load_touch_calibration_values(nvs_handle_t handle, app_touch_calibration_t *calibration)
 {
     uint8_t touch_calibration_valid = 0;
@@ -132,12 +129,23 @@ static esp_err_t load_touch_calibration(nvs_handle_t handle, app_touch_calibrati
     char stored_board_id[32] = {0};
     size_t stored_board_id_size = sizeof(stored_board_id);
     const char *current_board_id = greenlight_board_id_get();
+    uint8_t stored_version = 0;
     esp_err_t err = nvs_get_str(handle, KEY_TOUCH_CAL_BOARD, stored_board_id, &stored_board_id_size);
 
     if (err == ESP_OK) {
         if (strcmp(stored_board_id, current_board_id) != 0) {
             ESP_LOGI(TAG, "Ignoring touch calibration for board %s while running on %s", stored_board_id, current_board_id);
             return ESP_OK;
+        }
+
+        err = nvs_get_u8(handle, KEY_TOUCH_CAL_VERSION, &stored_version);
+        if (err == ESP_ERR_NVS_NOT_FOUND || stored_version != TOUCH_CALIBRATION_STORAGE_VERSION) {
+            ESP_LOGI(TAG, "Ignoring touch calibration in legacy format version %u", (unsigned int)stored_version);
+            return ESP_OK;
+        }
+
+        if (err != ESP_OK) {
+            return err;
         }
 
         return load_touch_calibration_values(handle, calibration);
@@ -147,22 +155,7 @@ static esp_err_t load_touch_calibration(nvs_handle_t handle, app_touch_calibrati
         return err;
     }
 
-    err = nvs_get_u8(handle, KEY_TOUCH_CAL_VALID, &(uint8_t){0});
-    if (err == ESP_ERR_NVS_NOT_FOUND) {
-        return ESP_OK;
-    }
-
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    if (!is_legacy_touch_calibration_board(current_board_id)) {
-        ESP_LOGI(TAG, "Ignoring legacy unscoped touch calibration while running on %s", current_board_id);
-        return ESP_OK;
-    }
-
-    ESP_LOGI(TAG, "Using legacy touch calibration for board %s until it is saved with board metadata", current_board_id);
-    return load_touch_calibration_values(handle, calibration);
+    return ESP_OK;
 }
 
 static esp_err_t store_touch_calibration(nvs_handle_t handle, const app_touch_calibration_t *calibration)
@@ -171,6 +164,7 @@ static esp_err_t store_touch_calibration(nvs_handle_t handle, const app_touch_ca
     const char *board_id = greenlight_board_id_get();
 
     ESP_RETURN_ON_ERROR(nvs_set_str(handle, KEY_TOUCH_CAL_BOARD, board_id), TAG, "save touch calibration board");
+    ESP_RETURN_ON_ERROR(nvs_set_u8(handle, KEY_TOUCH_CAL_VERSION, TOUCH_CALIBRATION_STORAGE_VERSION), TAG, "save touch calibration version");
     ESP_RETURN_ON_ERROR(nvs_set_u8(handle, KEY_TOUCH_CAL_VALID, valid), TAG, "save touch calibration valid flag");
     ESP_RETURN_ON_ERROR(nvs_set_i32(handle, KEY_TOUCH_XX, calibration != NULL ? calibration->xx : 0), TAG, "save touch xx");
     ESP_RETURN_ON_ERROR(nvs_set_i32(handle, KEY_TOUCH_XY, calibration != NULL ? calibration->xy : 0), TAG, "save touch xy");

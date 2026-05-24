@@ -63,6 +63,16 @@ jobs:
             --dir site/firmware \
             --clobber
 
+      - name: Inject Umami analytics snippet
+        if: vars.UMAMI_WEBSITE_ID != ''
+        env:
+          UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID }}
+        run: |
+          set -eu
+          snippet="<script defer src=\"https://cloud.umami.is/script.js\" data-website-id=\"${UMAMI_WEBSITE_ID}\"></script>"
+          sed -i "s|</head>|${snippet}\n\t</head>|" site/index.html
+          echo "Injected Umami snippet for website ${UMAMI_WEBSITE_ID}"
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

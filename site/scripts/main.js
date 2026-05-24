@@ -6,6 +6,15 @@
 
 const KIT_FORM_ENDPOINT = 'https://app.kit.com/forms/9480016/subscriptions';
 
+function track(event, data) {
+	if (typeof window === 'undefined' || !window.umami) return;
+	try {
+		window.umami.track(event, data);
+	} catch {
+		/* analytics never blocks UX */
+	}
+}
+
 const BOARDS = {
 	esp32_2432s028_ili9341: {
 		label: 'ESP32-2432S028 (Guition, ILI9341) — 2.8"',
@@ -96,7 +105,14 @@ function renderInstallButton(boardId) {
 	slotButton.className =
 		'btn-primary text-lg';
 	slotButton.textContent = 'Install Greenlight';
+	slotButton.addEventListener('click', () => track('flash-clicked', { board: boardId }));
 	installButton.appendChild(slotButton);
+
+	installButton.addEventListener('state-changed', (event) => {
+		const state = event.detail?.state;
+		if (state === 'finished') track('flash-completed', { board: boardId });
+		else if (state === 'error') track('flash-failed', { board: boardId });
+	});
 
 	const unsupported = document.createElement('span');
 	unsupported.slot = 'unsupported';
@@ -200,6 +216,7 @@ function wireWaitlistForm() {
 				'Success! Now check your email to confirm your subscription.',
 				'success'
 			);
+			track('waitlist-joined');
 		} catch (error) {
 			console.error('Waitlist submission failed', error);
 			setWaitlistStatus(

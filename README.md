@@ -49,6 +49,10 @@ Operationally, the easiest way to tell them apart is the silkscreen family and L
 
 If you are preparing a board for the first time, identify the hardware before flashing. Greenlight must receive the matching board-specific firmware over USB first so the installed image carries the correct board ID, display profile, touch defaults, and OTA compatibility rules from first boot onward.
 
+## Enclosure
+
+Greenlight Case is a 3D-printable enclosure for turning a bare Greenlight touchscreen board into a tidier desk- or wall-mounted device. The CAD exports, printable files, and enclosure notes live in [hardware/enclosure](hardware/enclosure), and the published model is available on MakerWorld at <https://makerworld.com/en/models/2843371-greenlight-case>.
+
 ## Software Stack
 
 - ESP-IDF 6
@@ -93,6 +97,7 @@ User-facing prices are based on VAT-inclusive unit rates returned by the public 
 
 ## Repository Layout
 
+- [hardware](hardware): physical build assets such as enclosure CAD, printable exports, and assembly notes
 - [main](main): ESP-IDF application code
 - [docs](docs): setup notes and project documentation
 - [docs/img](docs/img): README screenshots and documentation images

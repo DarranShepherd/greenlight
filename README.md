@@ -100,7 +100,9 @@ User-facing prices are based on VAT-inclusive unit rates returned by the public 
 
 ## Getting Started
 
-For local setup and validation details, see [docs/getting-started.md](docs/getting-started.md).
+The simplest way to install Greenlight on a supported board is the browser-based installer at <https://greenlight.ampernomics.com>. It uses Web Serial (Chrome or Edge on a desktop) to write the latest release directly over USB without installing ESP-IDF locally. This is the recommended path for first-time setup.
+
+The rest of this section covers building from source for contributors or out-of-band testing. For local setup and validation details, see [docs/getting-started.md](docs/getting-started.md).
 
 Minimal firmware build flow:
 
@@ -112,13 +114,13 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 To build an explicit board variant without changing the default workflow, use [docs/getting-started.md](docs/getting-started.md) and run `sh tools/validate.sh firmware esp32_2432s028_ili9341`, `sh tools/validate.sh firmware esp32_2432s028_st7789`, or `sh tools/validate.sh firmware esp32_32e_st7789`.
 
-For first-time device setup over USB, choose the build that matches the physical board:
+When flashing manually over USB, choose the build that matches the physical board:
 
 - Guition `ESP32-2432S028` 2.8-inch board: flash the `esp32_2432s028_ili9341` build.
 - Unbranded `ESP32-2432S028` 2.8-inch ST7789 board: flash the `esp32_2432s028_st7789` build.
 - `ESP32-32E` 3.2-inch board: flash the `esp32_32e_st7789` build.
 
-That initial USB flash is required before relying on OTA. OTA now selects release assets by the board ID compiled into the running firmware, so a device must already be running the correct board-specific image before Settings can safely install later updates.
+OTA selects release assets by the board ID compiled into the running firmware, so a device must already be running the correct board-specific image before Settings can safely install later updates. The browser flasher and a local `idf.py flash` both satisfy this requirement.
 
 The project is developed against ESP-IDF 6.0. The checked-in dev container is the easiest way to get a matching environment.
 

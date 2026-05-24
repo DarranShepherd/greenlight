@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	html {
+		scroll-behavior: smooth;
+	}
+
+	body {
+		font-family: 'Manrope', sans-serif;
+		@apply bg-background text-on-background antialiased;
+	}
+
+	::selection {
+		@apply bg-primary-container text-on-primary-container;
+	}
+}
+
+@layer components {
+	.btn-primary {
+		@apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container px-8 py-4 font-bold text-on-primary-container transition-all hover:shadow-[0_0_30px_rgba(224,248,0,0.3)] active:scale-95;
+	}
+
+	.btn-secondary {
+		@apply inline-flex items-center justify-center gap-2 rounded-lg border border-outline-variant/40 bg-surface-container-high px-8 py-4 font-bold text-on-background transition-colors hover:border-outline-variant hover:bg-surface-container-highest;
+	}
+
+	.card {
+		@apply rounded-2xl border border-outline-variant/15 bg-surface-container-low p-8;
+	}
+
+	.eyebrow {
+		@apply text-sm font-bold uppercase tracking-widest text-primary-container;
+	}
+}
+
+/* Override ESP Web Tools button so it matches our visual language. */
+esp-web-install-button {
+	--esp-tools-button-color: #525c00;
+	--esp-tools-button-text-color: #525c00;
+	--esp-tools-button-border-radius: 0.5rem;
+}

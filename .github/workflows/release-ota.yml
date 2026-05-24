@@ -35,14 +35,17 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p dist
 
-          PROJECT_VER="${VERSION}" sh tools/validate.sh firmware esp32_2432s028_ili9341
-          cp build-esp32_2432s028_ili9341/greenlight.bin dist/firmware-esp32_2432s028_ili9341.bin
+          build_board() {
+            board="$1"
+            PROJECT_VER="${VERSION}" sh tools/validate.sh firmware "${board}"
+            cp "build-${board}/greenlight.bin" "dist/firmware-${board}.bin"
+            # Merged image for first-time browser flashing via ESP Web Tools.
+            idf.py -B "build-${board}" merge-bin -o "dist/firmware-${board}-merged.bin" --format raw
+          }
 
-          PROJECT_VER="${VERSION}" sh tools/validate.sh firmware esp32_2432s028_st7789
-          cp build-esp32_2432s028_st7789/greenlight.bin dist/firmware-esp32_2432s028_st7789.bin
-
-          PROJECT_VER="${VERSION}" sh tools/validate.sh firmware esp32_32e_st7789
-          cp build-esp32_32e_st7789/greenlight.bin dist/firmware-esp32_32e_st7789.bin
+          build_board esp32_2432s028_ili9341
+          build_board esp32_2432s028_st7789
+          build_board esp32_32e_st7789
 
       - name: Generate OTA metadata
         shell: bash
@@ -66,5 +69,8 @@ jobs:
             dist/firmware-esp32_2432s028_ili9341.bin
             dist/firmware-esp32_2432s028_st7789.bin
             dist/firmware-esp32_32e_st7789.bin
+            dist/firmware-esp32_2432s028_ili9341-merged.bin
+            dist/firmware-esp32_2432s028_st7789-merged.bin
+            dist/firmware-esp32_32e_st7789-merged.bin
             dist/metadata.json
           overwrite_files: true

@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="dark" />
+		<title>Greenlight by Ampernomics — Designed to turn dynamic tariffs into simple everyday decisions.</title>
+		<meta
+			name="description"
+			content="Greenlight is a small open-source display for Octopus Agile and other time-of-use electricity tariffs. See at a glance when power is cheap or expensive."
+		/>
+
+		<meta property="og:title" content="Greenlight by Ampernomics" />
+		<meta
+			property="og:description"
+			content="A small open-source display that shows when electricity is cheap or expensive right now, and when the next cheaper period begins."
+		/>
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://greenlight.ampernomics.com/" />
+
+		<link rel="icon" href="img/favicon.svg" type="image/svg+xml" />
+		<link rel="stylesheet" href="dist/app.css" />
+
+		<script
+			type="module"
+			src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
+		></script>
+	</head>
+	<body class="bg-background text-on-background">
+		<header
+			class="fixed top-0 z-50 w-full bg-background/60 shadow-[0_40px_40px_rgba(0,0,0,0.08)] backdrop-blur-xl"
+		>
+			<div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 md:px-8">
+				<a href="#top" class="text-2xl font-black tracking-tighter text-primary-container">
+					Greenlight by Ampernomics
+				</a>
+				<nav class="hidden items-center gap-8 font-headline font-bold tracking-tight md:flex">
+					<a href="#how" class="text-on-background transition-colors hover:text-primary-container">
+						Why?
+					</a>
+					<a
+						href="#hardware"
+						class="text-on-background transition-colors hover:text-primary-container"
+					>
+						Hardware
+					</a>
+					<a
+						href="#flash"
+						class="text-on-background transition-colors hover:text-primary-container"
+					>
+						Flash
+					</a>
+					<a
+						href="#waitlist"
+						class="text-on-background transition-colors hover:text-primary-container"
+					>
+						Waitlist
+					</a>
+					<a
+						href="https://github.com/DarranShepherd/greenlight"
+						target="_blank"
+						rel="noopener"
+						class="text-on-background transition-colors hover:text-primary-container"
+					>
+						GitHub
+					</a>
+				</nav>
+				<a
+					href="#flash"
+					class="rounded bg-primary-container px-5 py-2 font-bold text-on-primary-container transition-all duration-300 hover:bg-primary active:scale-95"
+				>
+					Flash
+				</a>
+			</div>
+		</header>
+
+		<main id="top" class="pt-24">
+			<!-- Hero -->
+			<section
+				class="mx-auto flex max-w-7xl flex-col items-center gap-16 px-6 py-20 md:flex-row md:px-8 md:py-24"
+			>
+				<div class="md:w-1/2">
+					<p class="eyebrow mb-6">An Ampernomics project</p>
+					<h1
+						class="mb-8 text-5xl font-extrabold leading-[1.05] tracking-tighter text-on-background md:text-6xl lg:text-7xl"
+					>
+						Designed to turn dynamic tariffs into 
+						<span class="text-primary-container">simple everyday decisions.</span>
+					</h1>
+					<p class="mb-6 max-w-xl text-xl font-light leading-relaxed text-on-surface-variant md:text-2xl">
+						Greenlight is a small open-source display for Octopus Agile prices.
+					</p>
+					<p
+						class="mb-10 max-w-xl text-lg font-light leading-relaxed text-on-surface-variant md:text-xl"
+					>
+						Instead of checking apps and price graphs throughout the day, Greenlight sits in your
+						kitchen or utility room and shows when electricity is currently cheap or
+						expensive — along with when the next cheaper period begins.
+					</p>
+					<div class="flex flex-wrap gap-4">
+						<a href="#flash" class="btn-primary text-lg">Flash your device</a>
+						<a href="#waitlist" class="btn-secondary text-lg">Join the waitlist</a>
+					</div>
+				</div>
+				<div class="relative md:w-1/2">
+					<div
+						class="relative aspect-square overflow-hidden rounded-3xl border border-outline-variant/15 bg-surface-container-high"
+					>
+						<div
+							class="absolute inset-0 bg-gradient-to-tr from-surface-container-lowest to-transparent opacity-30"
+						></div>
+						<img
+							src="img/device-hero.jpg"
+							alt="Greenlight display sitting on a wooden surface showing the current Agile tariff band"
+							class="h-full w-full object-cover"
+							onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+						/>
+						<div
+							class="absolute inset-0 hidden flex-col items-center justify-center gap-3 px-8 text-center text-on-surface-variant"
+						>
+							<span class="text-xs uppercase tracking-widest">Photo coming soon</span>
+							<span class="text-sm"
+								>Device on a kitchen counter, glowing green during a cheap period</span
+							>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Why Greenlight exists -->
+			<section id="how" class="mx-auto max-w-5xl px-6 py-20 md:px-8 md:py-24">
+				<p class="eyebrow mb-4">Why Greenlight exists</p>
+				<h2
+					class="mb-10 text-4xl font-extrabold tracking-tight text-on-background md:text-5xl"
+				>
+					Pricing signals shouldn't be hidden inside an app.
+				</h2>
+				<div class="space-y-6 text-lg leading-relaxed text-on-surface-variant md:text-xl">
+					<p>
+						Many households can save money simply by moving onto a time-of-use tariff like Octopus Agile — even without changing behaviour.
+</p><p>
+But once you are on a dynamic tariff, timing starts to matter.
+</p><p>
+The problem is that pricing signals are usually buried inside apps and dashboards. Most people are not going to repeatedly check half-hourly prices before deciding whether to run the dishwasher or tumble dryer.
+					</p>
+					<p>Greenlight turns those pricing signals into something ambient and visible:</p>
+				</div>
+
+				<div class="mt-10 grid gap-4 md:grid-cols-3">
+					<div class="card flex items-start gap-4">
+						<span class="mt-1 inline-block h-3 w-3 shrink-0 rounded-full bg-expensive-red"></span>
+						<div>
+							<div class="font-bold text-on-background">Red</div>
+							<p class="text-on-surface-variant">Electricity is expensive right now.</p>
+						</div>
+					</div>
+					<div class="card flex items-start gap-4">
+						<span class="mt-1 inline-block h-3 w-3 shrink-0 rounded-full bg-cheap-green"></span>
+						<div>
+							<div class="font-bold text-on-background">Green</div>
+							<p class="text-on-surface-variant">Electricity is cheap right now.</p>
+						</div>
+					</div>
+					<div class="card flex items-start gap-4">
+						<span
+							class="mt-1 inline-block h-3 w-3 shrink-0 rounded-full bg-primary-container"
+						></span>
+						<div>
+							<div class="font-bold text-on-background">Countdown</div>
+							<p class="text-on-surface-variant">
+								When the next cheaper period begins.
+							</p>
+						</div>
+					</div>
+				</div>
+
+				<p class="mt-10 text-lg leading-relaxed text-on-surface-variant md:text-xl">
+					The goal is not obsessive optimisation. Just gentle behavioural nudges at the point
+					decisions are made.
+				</p>
+			</section>
+
+			<!-- Small timing shifts -->
+			<section class="mx-auto max-w-7xl px-6 py-20 md:px-8 md:py-24">
+				<div class="grid gap-16 md:grid-cols-2 md:items-center">
+					<div>
+						<p class="eyebrow mb-4">Small shifts add up</p>
+						<h2
+							class="mb-8 text-4xl font-extrabold tracking-tight text-on-background md:text-5xl"
+						>
+							On Octopus Agile, prices vary throughout the day.
+						</h2>
+						<p class="mb-8 text-lg text-on-surface-variant md:text-xl">Typical peak vs off-peak differences</p>
+						<ul class="space-y-4 text-lg text-on-surface-variant md:text-xl">
+							<li class="flex items-baseline gap-3">
+								<span class="text-primary-container">›</span>
+								<span>Dishwasher cycle: <strong class="text-on-background">~10–25p</strong> difference</span>
+							</li>
+							<li class="flex items-baseline gap-3">
+								<span class="text-primary-container">›</span>
+								<span>Washing machine: <strong class="text-on-background">~5–15p</strong> difference</span>
+							</li>
+							<li class="flex items-baseline gap-3">
+								<span class="text-primary-container">›</span>
+								<span>Tumble dryer: often significantly more</span>
+							</li>
+						</ul>
+						<p class="mt-8 text-lg text-on-surface-variant md:text-xl">
+							Greenlight makes those pricing changes visible without requiring constant attention.
+						</p>
+						<p class="mt-8 text-sm text-on-surface-variant">Examples vary depending on appliance energy use and daily Agile pricing.</p>
+					</div>
+					<div
+						class="overflow-hidden rounded-3xl border border-outline-variant/15 bg-surface-container-lowest p-6"
+					>
+						<img
+							src="img/primary-super-cheap.png"
+							alt="Greenlight showing a super-cheap pricing period"
+							class="w-full rounded-xl"
+						/>
+					</div>
+				</div>
+			</section>
+
+			<!-- Open source -->
+			<section class="mx-auto max-w-5xl px-6 py-20 md:px-8 md:py-24">
+				<div
+					class="rounded-3xl border border-outline-variant/15 bg-surface-container-low p-10 md:p-14"
+				>
+					<p class="eyebrow mb-4">Open source</p>
+					<h2 class="mb-8 text-3xl font-extrabold tracking-tight text-on-background md:text-4xl">
+						Built on inexpensive hardware. Fully open.
+					</h2>
+					<ul
+						class="grid gap-3 text-lg text-on-surface-variant md:grid-cols-2 md:text-xl"
+					>
+						<li class="flex items-center gap-3">
+							<span class="text-primary-container">●</span>
+							<span>ESP32 based</span>
+						</li>
+						<li class="flex items-center gap-3">
+							<span class="text-primary-container">●</span>
+							<span>Open source</span>
+						</li>
+						<li class="flex items-center gap-3">
+							<span class="text-primary-container">●</span>
+							<span>Designed for Cheap Yellow Display</span>
+						</li>
+						<li class="flex items-center gap-3">
+							<span class="text-primary-container">●</span>
+							<span>Built using ESP-IDF + LVGL</span>
+						</li>
+					</ul>
+					<a
+						href="https://github.com/DarranShepherd/greenlight"
+						target="_blank"
+						rel="noopener"
+						class="mt-8 inline-flex items-center gap-2 font-bold text-primary-container hover:underline"
+					>
+						View on GitHub →
+					</a>
+				</div>
+			</section>
+
+			<!-- Supported hardware -->
+			<section id="hardware" class="mx-auto max-w-7xl px-6 py-20 md:px-8 md:py-24">
+				<p class="eyebrow mb-4">Supported hardware</p>
+				<h2
+					class="mb-12 max-w-3xl text-4xl font-extrabold tracking-tight text-on-background md:text-5xl"
+				>
+					Greenlight runs on these ESP32 boards.
+				</h2>
+
+				<div class="grid gap-6 md:grid-cols-3">
+					<article class="card flex flex-col">
+						<div
+							class="mb-6 aspect-[4/3] overflow-hidden rounded-xl bg-surface-container-high"
+						>
+							<img
+								src="img/guition-cyd.png"
+								alt="Guition CYD board"
+								class="h-full w-full object-contain"
+							/>
+						</div>
+						<h3 class="mb-2 text-xl font-bold text-on-background">
+							Guition ESP32-2432S028R
+						</h3>
+						<p class="mb-1 text-sm uppercase tracking-widest text-primary-container">2.8"</p>
+						<p class="mb-6 text-on-surface-variant">
+							Guition-branded 2.8-inch Cheap Yellow Display with ILI9341 controller and resistive
+							touch.
+						</p>
+						<div class="mt-auto flex flex-wrap gap-3">
+							<a
+								href="https://www.aliexpress.com/item/1005004961285750.html"
+								target="_blank"
+								rel="noopener"
+								class="text-sm font-bold text-primary-container hover:underline"
+							>
+								Buy on AliExpress →
+							</a>
+						</div>
+					</article>
+
+					<article class="card flex flex-col">
+						<div
+							class="mb-6 aspect-[4/3] overflow-hidden rounded-xl bg-surface-container-high"
+						>
+							<img
+								src="img/diybits-cyd.png"
+								alt="ESP32-2432S028 clone"
+								class="h-full w-full object-contain"
+							/>
+						</div>
+						<h3 class="mb-2 text-xl font-bold text-on-background">
+							ESP32-2432S028 clone
+						</h3>
+						<p class="mb-1 text-sm uppercase tracking-widest text-primary-container">2.8"</p>
+						<p class="mb-6 text-on-surface-variant">
+							2.8-inch CYD variant with ST7789 controller available from Amazon UK.
+						</p>
+						<div class="mt-auto flex flex-wrap gap-3">
+							<a
+								href="https://www.amazon.co.uk/dp/B0F24X83FC"
+								target="_blank"
+								rel="noopener"
+								class="text-sm font-bold text-primary-container hover:underline"
+							>
+								Buy on Amazon UK →
+							</a>
+						</div>
+					</article>
+
+					<article class="card flex flex-col">
+						<div
+							class="mb-6 aspect-[4/3] overflow-hidden rounded-xl bg-surface-container-high"
+						>
+							<img
+								src="img/esp32-32e.png"
+								alt="ESP32-32E board"
+								class="h-full w-full object-contain"
+							/>
+						</div>
+						<h3 class="mb-2 text-xl font-bold text-on-background">ESP32-32E</h3>
+						<p class="mb-1 text-sm uppercase tracking-widest text-primary-container">3.2"</p>
+						<p class="mb-6 text-on-surface-variant">
+							3.2-inch ESP32-32E board, larger display with resistive touch.
+						</p>
+						<div class="mt-auto flex flex-wrap gap-3">
+							<a
+								href="https://www.aliexpress.com/item/1005008239809369.html"
+								target="_blank"
+								rel="noopener"
+								class="text-sm font-bold text-primary-container hover:underline"
+							>
+								Buy on AliExpress →
+							</a>
+						</div>
+					</article>
+				</div>
+
+				<p class="mt-8 text-sm text-on-surface-variant">
+					AliExpress listings frequently reuse the same model numbers across slightly different
+					hardware. Match the LCD controller (ILI9341 vs ST7789) before flashing.
+				</p>
+			</section>
+
+			<!-- Flasher -->
+			<section
+				id="flash"
+				class="border-y border-outline-variant/15 bg-surface-container-low py-20 md:py-24"
+			>
+				<div class="mx-auto max-w-5xl px-6 md:px-8">
+					<p class="eyebrow mb-4">Flash your device</p>
+					<h2
+						class="mb-8 text-4xl font-extrabold tracking-tight text-on-background md:text-5xl"
+					>
+						Already have compatible hardware?
+					</h2>
+					<p class="mb-10 max-w-2xl text-lg text-on-surface-variant md:text-xl">
+						Flash Greenlight directly from your browser using Web Serial. No drivers, no toolchain
+						— just plug the board into a USB data cable and click install.
+					</p>
+
+					<div class="card mb-6">
+						<ol class="list-decimal space-y-2 pl-6 text-on-surface-variant">
+							<li>Connect the device with a USB data cable (not just charging).</li>
+							<li>Open this page in Chrome or Edge on a desktop computer.</li>
+							<li>Select your board variant below.</li>
+							<li>Click <strong class="text-on-background">Install Greenlight</strong> and pick the serial device.</li>
+							<li>Wait for the flash to complete, then unplug and power on.</li>
+						</ol>
+					</div>
+
+					<div class="card">
+						<label
+							for="device-select"
+							class="mb-2 block text-sm font-bold uppercase tracking-widest text-primary-container"
+						>
+							Select your board
+						</label>
+						<select
+							id="device-select"
+							class="mb-6 w-full rounded-lg border-outline-variant/40 bg-surface-container-high px-4 py-3 text-on-background focus:border-primary-container focus:ring-primary-container"
+						>
+							<option value="">Choose a board…</option>
+							<option value="esp32_2432s028_ili9341">
+								ESP32-2432S028 (Guition, ILI9341) — 2.8"
+							</option>
+							<option value="esp32_2432s028_st7789">
+								ESP32-2432S028 (Unbranded, ST7789) — 2.8"
+							</option>
+							<option value="esp32_32e_st7789">ESP32-32E (ST7789) — 3.2"</option>
+						</select>
+
+						<div id="flash-target" class="flex flex-wrap items-center gap-4">
+							<button
+								id="flash-disabled"
+								type="button"
+								class="cursor-not-allowed rounded-lg bg-surface-container-high px-8 py-4 font-bold text-on-surface-variant"
+								disabled
+							>
+								Install Greenlight
+							</button>
+						</div>
+
+						<div id="flash-version" class="mt-4 text-sm text-on-surface-variant"></div>
+						<div
+							id="flash-browser-warning"
+							class="mt-6 hidden rounded-lg border border-error/40 bg-error/10 p-4 text-sm text-on-surface"
+						>
+							Your browser doesn't support Web Serial. Open this page in
+							<strong>Chrome</strong> or <strong>Edge</strong> on a desktop computer to flash a
+							device.
+						</div>
+					</div>
+
+					<p class="mt-8 max-w-2xl text-sm text-on-surface-variant">
+						Current builds are still aimed primarily at hobbyists/tinkerers. You may occasionally
+						need to update firmware manually while the project evolves.
+					</p>
+				</div>
+			</section>
+
+			<!-- Waitlist -->
+			<section id="waitlist" class="mx-auto max-w-5xl px-6 py-20 md:px-8 md:py-24">
+				<div
+					class="overflow-hidden rounded-3xl bg-primary-container px-8 py-8 text-on-primary-container md:px-14 md:py-12"
+				>
+					<p class="text-sm font-bold uppercase tracking-widest opacity-70">Prebuilt devices</p>
+					<h2 class="mt-4 text-4xl font-black tracking-tighter md:text-5xl">
+						Interested in a prebuilt Greenlight?
+					</h2>
+					<p class="mt-6 max-w-2xl text-lg leading-relaxed md:text-xl">
+						A few people have asked about prebuilt units, so I’m exploring putting together a small batch with pre-flashed firmware, a 3D printed case, and wall or shelf mounting options.
+					</p>
+					<p class="mt-4 max-w-2xl text-base opacity-80 md:text-lg">
+						This is currently an interest list only — no commitment or payment required.
+					</p>
+
+					<form id="waitlist-form" class="mt-10 max-w-xl" novalidate>
+						<label for="waitlist-email" class="sr-only">Email address</label>
+						<div class="flex flex-col gap-3 sm:flex-row">
+							<input
+								id="waitlist-email"
+								name="email_address"
+								type="email"
+								required
+								autocomplete="email"
+								placeholder="you@example.com"
+								class="w-full flex-1 rounded-lg border-0 bg-surface-container-lowest px-5 py-4 text-base text-on-surface placeholder:text-on-surface-variant focus:ring-2 focus:ring-surface-container-lowest sm:text-lg"
+							/>
+							<button
+								type="submit"
+								class="rounded-lg bg-surface-container-lowest px-8 py-4 font-bold text-on-surface transition-transform hover:scale-[1.02] active:scale-95"
+							>
+								Join waitlist
+							</button>
+						</div>
+						<p
+							id="waitlist-status"
+							class="mt-4 hidden text-base font-medium"
+							role="status"
+							aria-live="polite"
+						></p>
+						<p class="mt-4 text-sm opacity-70">
+							We'll only contact you about Greenlight availability and major updates.
+						</p>
+					</form>
+				</div>
+			</section>
+
+			<!-- Philosophy -->
+			<section class="mx-auto max-w-4xl px-6 py-20 md:px-8 md:py-24">
+				<p class="eyebrow mb-4">Philosophy</p>
+				<h2 class="mb-8 text-3xl font-extrabold tracking-tight text-on-background md:text-4xl">
+					Greenlight is intentionally simple.
+				</h2>
+				<p class="mb-6 text-lg text-on-surface-variant md:text-xl">It is not trying to be:</p>
+				<ul class="mb-8 space-y-2 text-lg text-on-surface-variant md:text-xl">
+					<li>— a smart home dashboard</li>
+					<li>— a full energy monitor</li>
+					<li>— a complex optimisation tool</li>
+				</ul>
+				<p class="text-lg text-on-surface-variant md:text-xl">
+					The goal is simply to make dynamic electricity pricing visible enough that small
+					behavioural changes happen naturally over time.
+				</p>
+			</section>
+		</main>
+
+		<footer class="border-t border-outline-variant/15 bg-background py-12">
+			<div
+				class="mx-auto flex max-w-7xl flex-col items-center gap-4 px-6 md:flex-row md:justify-between md:px-8"
+			>
+				<div class="text-lg font-bold text-on-background">
+					Greenlight by
+					<a
+						href="https://ampernomics.com"
+						target="_blank"
+						rel="noopener"
+						class="text-primary-container hover:underline"
+						>Ampernomics</a
+					>
+				</div>
+				<div class="flex flex-wrap justify-center gap-6 text-sm">
+					<a
+						href="https://github.com/DarranShepherd/greenlight"
+						target="_blank"
+						rel="noopener"
+						class="text-on-surface-variant transition-colors hover:text-on-background"
+						>GitHub</a
+					>
+					<a
+						href="https://ampernomics.com/privacy"
+						target="_blank"
+						rel="noopener"
+						class="text-on-surface-variant transition-colors hover:text-on-background"
+						>Privacy</a
+					>
+				</div>
+				<div class="text-xs text-on-surface-variant">
+					Greenlight is an independent project. Octopus Agile and Octopus Energy are trademarks of
+					their respective owners.
+				</div>
+			</div>
+		</footer>
+
+		<script type="module" src="scripts/main.js"></script>
+	</body>
+</html>

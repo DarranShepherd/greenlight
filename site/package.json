@@ -1,0 +1,14 @@
+{
+  "name": "greenlight-site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Static landing page and browser flasher for Greenlight by Ampernomics.",
+  "scripts": {
+    "build": "tailwindcss -i ./src/input.css -o ./dist/app.css --minify",
+    "watch": "tailwindcss -i ./src/input.css -o ./dist/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.10",
+    "tailwindcss": "^3.4.17"
+  }
+}

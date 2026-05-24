@@ -40,7 +40,8 @@ jobs:
             PROJECT_VER="${VERSION}" sh tools/validate.sh firmware "${board}"
             cp "build-${board}/greenlight.bin" "dist/firmware-${board}.bin"
             # Merged image for first-time browser flashing via ESP Web Tools.
-            idf.py -B "build-${board}" merge-bin -o "dist/firmware-${board}-merged.bin" --format raw
+            # merge-bin's -o path is resolved relative to the build dir, so pass an absolute path.
+            idf.py -B "build-${board}" merge-bin -o "${PWD}/dist/firmware-${board}-merged.bin" --format raw
           }
 
           build_board esp32_2432s028_ili9341

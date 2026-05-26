@@ -222,7 +222,18 @@ static void tileview_event_cb(lv_event_t *event)
 
 static void sync_tile_locked(const app_state_t *state)
 {
+    lv_point_t scroll_end = {0};
+
     if (state->startup_stage != APP_STARTUP_STAGE_COMPLETE) {
+        return;
+    }
+
+    if (lv_obj_has_state(s_view.tileview, LV_STATE_SCROLLED)) {
+        return;
+    }
+
+    lv_obj_get_scroll_end(s_view.tileview, &scroll_end);
+    if (lv_obj_get_scroll_x(s_view.tileview) != scroll_end.x || lv_obj_get_scroll_y(s_view.tileview) != scroll_end.y) {
         return;
     }
 

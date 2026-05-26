@@ -17,6 +17,8 @@
 
 static const char *TAG = "lcd";
 
+#define GREENLIGHT_QSPI_PSRAM_BUFFER_LINES 32
+
 static esp_err_t lcd_send_command(esp_lcd_panel_io_handle_t panel_io, int command, const void *data, size_t data_size)
 {
     return esp_lcd_panel_io_tx_param(panel_io, command, data, data_size);
@@ -101,6 +103,15 @@ esp_err_t lcd_init(esp_lcd_panel_io_handle_t *panel_io, esp_lcd_panel_handle_t *
     const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
     const greenlight_display_profile_t *display = &board_profile->display;
     size_t draw_buffer_size = (size_t)display->h_res * display->draw_buffer_lines;
+    size_t max_transfer_lines = display->draw_buffer_lines;
+    size_t max_transfer_size = draw_buffer_size * sizeof(uint16_t);
+
+#if CONFIG_SPIRAM
+    if (display->bus_type == GREENLIGHT_DISPLAY_BUS_QSPI && max_transfer_lines < GREENLIGHT_QSPI_PSRAM_BUFFER_LINES) {
+        max_transfer_lines = GREENLIGHT_QSPI_PSRAM_BUFFER_LINES;
+        max_transfer_size = (size_t)display->h_res * max_transfer_lines * sizeof(uint16_t);
+    }
+#endif
 
     const spi_bus_config_t bus_config = {
         .mosi_io_num = display->spi_mosi,
@@ -108,7 +119,7 @@ esp_err_t lcd_init(esp_lcd_panel_io_handle_t *panel_io, esp_lcd_panel_handle_t *
         .sclk_io_num = display->spi_clk,
         .quadwp_io_num = GPIO_NUM_NC,
         .quadhd_io_num = GPIO_NUM_NC,
-        .max_transfer_sz = draw_buffer_size * sizeof(uint16_t),
+        .max_transfer_sz = max_transfer_size,
     };
 
     const esp_lcd_panel_io_spi_config_t io_config = {
@@ -134,7 +145,7 @@ esp_err_t lcd_init(esp_lcd_panel_io_handle_t *panel_io, esp_lcd_panel_handle_t *
             .sclk_io_num = display->spi_clk,
             .quadwp_io_num = display->spi_data2,
             .quadhd_io_num = display->spi_data3,
-            .max_transfer_sz = draw_buffer_size * sizeof(uint16_t),
+            .max_transfer_sz = max_transfer_size,
         };
 
         ESP_RETURN_ON_ERROR(spi_bus_initialize(display->spi_host, &qspi_bus_config, SPI_DMA_CH_AUTO), TAG, "initialize LCD QSPI bus");
@@ -181,11 +192,23 @@ lv_display_t *lvgl_display_init(esp_lcd_panel_io_handle_t panel_io, esp_lcd_pane
     const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
     const greenlight_display_profile_t *display = &board_profile->display;
     size_t draw_buffer_size = (size_t)display->h_res * display->draw_buffer_lines;
+    size_t lvgl_buffer_size = draw_buffer_size;
+    size_t lvgl_trans_size = 0;
+    bool lvgl_buffer_dma = true;
+    bool lvgl_buffer_spiram = false;
+
+#if CONFIG_SPIRAM
+    if (display->bus_type == GREENLIGHT_DISPLAY_BUS_QSPI) {
+        lvgl_buffer_size = (size_t)display->h_res * display->v_res;
+        lvgl_buffer_spiram = true;
+        lvgl_buffer_dma = false;
+    }
+#endif
 
     const lvgl_port_cfg_t lvgl_config = {
         .task_priority = 4,
         .task_stack = 8192,
-        .task_affinity = -1,
+        .task_affinity = CONFIG_FREERTOS_NUMBER_OF_CORES > 1 ? 1 : 0,
         .task_max_sleep_ms = 500,
         .timer_period_ms = 5,
     };
@@ -193,8 +216,9 @@ lv_display_t *lvgl_display_init(esp_lcd_panel_io_handle_t panel_io, esp_lcd_pane
     const lvgl_port_display_cfg_t display_config = {
         .io_handle = panel_io,
         .panel_handle = panel,
-        .buffer_size = draw_buffer_size,
+        .buffer_size = lvgl_buffer_size,
         .double_buffer = display->double_buffer,
+        .trans_size = lvgl_trans_size,
         .hres = display->h_res,
         .vres = display->v_res,
         .monochrome = false,
@@ -207,8 +231,8 @@ lv_display_t *lvgl_display_init(esp_lcd_panel_io_handle_t panel_io, esp_lcd_pane
             .mirror_y = display->mirror_y,
         },
         .flags = {
-            .buff_dma = true,
-            .buff_spiram = false,
+            .buff_dma = lvgl_buffer_dma,
+            .buff_spiram = lvgl_buffer_spiram,
             .swap_bytes = display->swap_bytes,
         },
     };
@@ -219,5 +243,7 @@ lv_display_t *lvgl_display_init(esp_lcd_panel_io_handle_t panel_io, esp_lcd_pane
         return NULL;
     }
 
-    return lvgl_port_add_disp(&display_config);
+    lv_display_t *display_handle = lvgl_port_add_disp(&display_config);
+
+    return display_handle;
 }

@@ -30,6 +30,7 @@ typedef struct {
     lv_obj_t *primary_hero_center_col;
     lv_obj_t *primary_pulse_dot;
     lv_obj_t *primary_pulse_icon_label;
+    bool primary_pulse_enabled;
     lv_obj_t *primary_price_label;
     lv_obj_t *primary_price_unit_label;
     lv_obj_t *primary_remaining_label;

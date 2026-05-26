@@ -19,6 +19,14 @@ typedef struct {
     bool pulse;
 } primary_palette_t;
 
+enum {
+    PRIMARY_PULSE_MIN_OPACITY = LV_OPA_30,
+    PRIMARY_PULSE_MAX_OPACITY = LV_OPA_COVER,
+    PRIMARY_PULSE_HALF_CYCLE_MS = 1800,
+    PRIMARY_PULSE_CYCLE_MS = PRIMARY_PULSE_HALF_CYCLE_MS * 2,
+    PRIMARY_PULSE_MAX_PHASE = PRIMARY_PULSE_CYCLE_MS - 1,
+};
+
 static void format_compact_time(char *buffer, size_t buffer_size, time_t local_time)
 {
     struct tm local_tm = {0};
@@ -73,6 +81,34 @@ static void format_until_time(char *buffer, size_t buffer_size, time_t local_tim
     snprintf(buffer, buffer_size, "Until %s", time_text);
 }
 
+static void primary_pulse_anim_cb(void *object, int32_t value)
+{
+    lv_obj_t *dot = (lv_obj_t *)object;
+    int32_t half_cycle = PRIMARY_PULSE_HALF_CYCLE_MS;
+    int32_t phase = value;
+    int32_t opacity = 0;
+
+    if (dot == NULL) {
+        return;
+    }
+
+    if (phase < 0) {
+        phase = 0;
+    } else if (phase > PRIMARY_PULSE_MAX_PHASE) {
+        phase = PRIMARY_PULSE_MAX_PHASE;
+    }
+
+    if (phase <= half_cycle) {
+        opacity = PRIMARY_PULSE_MIN_OPACITY +
+                  ((PRIMARY_PULSE_MAX_OPACITY - PRIMARY_PULSE_MIN_OPACITY) * phase) / half_cycle;
+    } else {
+        opacity = PRIMARY_PULSE_MAX_OPACITY -
+                  ((PRIMARY_PULSE_MAX_OPACITY - PRIMARY_PULSE_MIN_OPACITY) * (phase - half_cycle)) / half_cycle;
+    }
+
+    lv_obj_set_style_bg_opa(dot, (lv_opa_t)opacity, 0);
+    lv_obj_set_style_outline_opa(dot, (lv_opa_t)(opacity / 2), 0);
+}
 static bool tariff_band_is_extreme(tariff_band_t band)
 {
     return band == TARIFF_BAND_SUPER_CHEAP || band == TARIFF_BAND_VERY_EXPENSIVE;
@@ -246,18 +282,6 @@ static primary_palette_t get_primary_palette_for_band(tariff_band_t band)
     }
 }
 
-static void primary_pulse_anim_cb(void *object, int32_t value)
-{
-    lv_obj_t *dot = (lv_obj_t *)object;
-
-    if (dot == NULL) {
-        return;
-    }
-
-    lv_obj_set_style_bg_opa(dot, (lv_opa_t)value, 0);
-    lv_obj_set_style_outline_opa(dot, (lv_opa_t)(value / 2), 0);
-}
-
 static void set_primary_pulse_enabled(ui_router_view_t *view, bool enabled)
 {
     lv_anim_t animation;
@@ -265,6 +289,12 @@ static void set_primary_pulse_enabled(ui_router_view_t *view, bool enabled)
     if (view->primary_pulse_dot == NULL) {
         return;
     }
+
+    if (view->primary_pulse_enabled == enabled) {
+        return;
+    }
+
+    view->primary_pulse_enabled = enabled;
 
     lv_anim_del(view->primary_pulse_dot, primary_pulse_anim_cb);
 
@@ -274,12 +304,14 @@ static void set_primary_pulse_enabled(ui_router_view_t *view, bool enabled)
         return;
     }
 
+    lv_obj_set_style_bg_opa(view->primary_pulse_dot, PRIMARY_PULSE_MIN_OPACITY, 0);
+    lv_obj_set_style_outline_opa(view->primary_pulse_dot, (lv_opa_t)(PRIMARY_PULSE_MIN_OPACITY / 2), 0);
+
     lv_anim_init(&animation);
     lv_anim_set_var(&animation, view->primary_pulse_dot);
     lv_anim_set_exec_cb(&animation, primary_pulse_anim_cb);
-    lv_anim_set_values(&animation, LV_OPA_30, LV_OPA_COVER);
-    lv_anim_set_time(&animation, 900);
-    lv_anim_set_playback_time(&animation, 900);
+    lv_anim_set_values(&animation, 0, PRIMARY_PULSE_MAX_PHASE);
+    lv_anim_set_time(&animation, PRIMARY_PULSE_CYCLE_MS);
     lv_anim_set_repeat_count(&animation, LV_ANIM_REPEAT_INFINITE);
     lv_anim_start(&animation);
 }

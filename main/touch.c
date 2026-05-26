@@ -1,7 +1,9 @@
 #include "touch.h"
 
+#include <driver/i2c_master.h>
 #include <driver/spi_master.h>
 #include <esp_check.h>
+#include <esp_lcd_touch_gt911.h>
 #include <esp_lcd_touch_xpt2046.h>
 #include <string.h>
 
@@ -15,7 +17,7 @@ static int32_t s_last_raw_x;
 static int32_t s_last_raw_y;
 static bool s_has_last_raw_point;
 
-static void touch_apply_orientation(int32_t *x, int32_t *y)
+static void touch_apply_orientation(int32_t *x, int32_t *y, int32_t max_x, int32_t max_y)
 {
     int32_t adjusted_x = 0;
     int32_t adjusted_y = 0;
@@ -28,11 +30,11 @@ static void touch_apply_orientation(int32_t *x, int32_t *y)
     adjusted_y = *y;
 
     if (s_touch_profile.mirror_x) {
-        adjusted_x = TOUCH_RAW_COORDINATE_MAX - adjusted_x;
+        adjusted_x = max_x - adjusted_x;
     }
 
     if (s_touch_profile.mirror_y) {
-        adjusted_y = TOUCH_RAW_COORDINATE_MAX - adjusted_y;
+        adjusted_y = max_y - adjusted_y;
     }
 
     if (s_touch_profile.swap_xy) {
@@ -65,8 +67,14 @@ static void touch_process_coordinates(
         int32_t raw_y = (int32_t)y[index];
         int32_t adjusted_x = 0;
         int32_t adjusted_y = 0;
+        bool direct_coordinates = s_touch_profile.controller == GREENLIGHT_TOUCH_CONTROLLER_GT911;
 
-        touch_apply_orientation(&raw_x, &raw_y);
+        touch_apply_orientation(
+            &raw_x,
+            &raw_y,
+            direct_coordinates ? (int32_t)(tp->config.x_max - 1) : TOUCH_RAW_COORDINATE_MAX,
+            direct_coordinates ? (int32_t)(tp->config.y_max - 1) : TOUCH_RAW_COORDINATE_MAX
+        );
         s_last_raw_x = raw_x;
         s_last_raw_y = raw_y;
         s_has_last_raw_point = true;
@@ -84,6 +92,9 @@ static void touch_process_coordinates(
                  (int64_t)s_touch_calibration.y_offset) /
                 APP_TOUCH_CALIBRATION_SCALE
             );
+        } else if (direct_coordinates) {
+            adjusted_x = raw_x;
+            adjusted_y = raw_y;
         } else {
             adjusted_x = (raw_x * (tp->config.x_max - 1)) / TOUCH_RAW_COORDINATE_MAX;
             adjusted_y = (raw_y * (tp->config.y_max - 1)) / TOUCH_RAW_COORDINATE_MAX;
@@ -137,6 +148,42 @@ esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
     s_touch_profile = *touch;
     s_has_last_raw_point = false;
 
+    const esp_lcd_touch_config_t touch_config = {
+        .x_max = display->h_res,
+        .y_max = display->v_res,
+        .rst_gpio_num = touch->reset,
+        .int_gpio_num = touch->irq,
+        .process_coordinates = touch_process_coordinates,
+        .levels = {
+            .reset = 0,
+            .interrupt = 0,
+        },
+        .flags = {
+            .swap_xy = false,
+            .mirror_x = false,
+            .mirror_y = false,
+        },
+    };
+
+    if (touch->bus_type == GREENLIGHT_TOUCH_BUS_I2C && touch->controller == GREENLIGHT_TOUCH_CONTROLLER_GT911) {
+        i2c_master_bus_handle_t i2c_handle = NULL;
+        const i2c_master_bus_config_t i2c_config = {
+            .i2c_port = touch->i2c_port,
+            .sda_io_num = touch->i2c_sda,
+            .scl_io_num = touch->i2c_scl,
+            .clk_source = I2C_CLK_SRC_DEFAULT,
+        };
+        esp_lcd_panel_io_i2c_config_t io_config = ESP_LCD_TOUCH_IO_I2C_GT911_CONFIG();
+
+        io_config.dev_addr = touch->i2c_address;
+        io_config.scl_speed_hz = touch->clock_hz;
+
+        ESP_RETURN_ON_ERROR(i2c_new_master_bus(&i2c_config, &i2c_handle), TAG, "initialize touch I2C bus");
+        ESP_RETURN_ON_ERROR(esp_lcd_new_panel_io_i2c(i2c_handle, &io_config, &touch_io), TAG, "create touch IO handle");
+        ESP_RETURN_ON_ERROR(esp_lcd_touch_new_i2c_gt911(touch_io, &touch_config, touch_handle), TAG, "create GT911 touch handle");
+        return ESP_OK;
+    }
+
     const spi_bus_config_t bus_config = {
         .mosi_io_num = touch->spi_mosi,
         .miso_io_num = touch->spi_miso,
@@ -168,23 +215,6 @@ esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
             .sio_mode = 0,
             .lsb_first = 0,
             .cs_high_active = 0,
-        },
-    };
-
-    const esp_lcd_touch_config_t touch_config = {
-        .x_max = display->h_res,
-        .y_max = display->v_res,
-        .rst_gpio_num = touch->reset,
-        .int_gpio_num = touch->irq,
-        .process_coordinates = touch_process_coordinates,
-        .levels = {
-            .reset = 0,
-            .interrupt = 0,
-        },
-        .flags = {
-            .swap_xy = false,
-            .mirror_x = false,
-            .mirror_y = false,
         },
     };
 

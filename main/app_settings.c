@@ -57,6 +57,10 @@ static const app_touch_calibration_t s_esp32_2432s028_st7789_touch_seed = {
     .y_offset = -15139,
 };
 
+static const app_touch_calibration_t s_uncalibrated_touch_seed = {
+    .valid = false,
+};
+
 static uint8_t clamp_brightness(uint8_t brightness_percent)
 {
     if (brightness_percent < APP_SETTINGS_MIN_BRIGHTNESS_PERCENT) {
@@ -109,7 +113,12 @@ static esp_err_t load_i32_setting(nvs_handle_t handle, const char *key, int32_t 
 
 static const app_touch_calibration_t *get_touch_calibration_seed(void)
 {
+    const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
     const char *board_id = greenlight_board_id_get();
+
+    if (board_profile->touch.controller == GREENLIGHT_TOUCH_CONTROLLER_GT911) {
+        return &s_uncalibrated_touch_seed;
+    }
 
     if (strcmp(board_id, "esp32_32e_st7789") == 0) {
         return &s_esp32_32e_st7789_touch_seed;

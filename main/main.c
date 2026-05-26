@@ -111,7 +111,7 @@ void app_main(void)
     ESP_LOGI(TAG, "LVGL display initialized");
 
     ESP_RETURN_VOID_ON_FALSE(lvgl_port_lock(1000), TAG, "lock LVGL for display rotation");
-    lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
+    lv_display_set_rotation(display, LV_DISPLAY_ROTATION_180);
     lvgl_port_unlock();
     ESP_LOGI(TAG, "LVGL display rotation applied");
 

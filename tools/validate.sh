@@ -19,6 +19,7 @@ Boards:
     esp32_2432s028_ili9341      ESP32-2432S028 2.8-inch board with ILI9341 LCD.
     esp32_2432s028_st7789       ESP32-2432S028 2.8-inch board with ST7789 LCD.
     esp32_32e_st7789            ESP32-32E 3.2-inch board with ST7789 LCD.
+    jc4827w543                  JC4827W543 4.3-inch board with experimental support.
 EOF
 }
 
@@ -62,18 +63,27 @@ resolve_board() {
     case "$board" in
         esp32_2432s028_ili9341)
             BOARD_LABEL="ESP32-2432S028 / ILI9341"
+            BOARD_TARGET="esp32"
             BOARD_BUILD_DIR="$ROOT_DIR/build-esp32_2432s028_ili9341"
             BOARD_DEFAULTS_REL="sdkconfig.board-esp32_2432s028_ili9341.defaults"
             ;;
         esp32_2432s028_st7789)
             BOARD_LABEL="ESP32-2432S028 / ST7789"
+            BOARD_TARGET="esp32"
             BOARD_BUILD_DIR="$ROOT_DIR/build-esp32_2432s028_st7789"
             BOARD_DEFAULTS_REL="sdkconfig.board-esp32_2432s028_st7789.defaults"
             ;;
         esp32_32e_st7789)
             BOARD_LABEL="ESP32-32E / ST7789"
+            BOARD_TARGET="esp32"
             BOARD_BUILD_DIR="$ROOT_DIR/build-esp32_32e_st7789"
             BOARD_DEFAULTS_REL="sdkconfig.board-esp32_32e_st7789.defaults"
+            ;;
+        jc4827w543)
+            BOARD_LABEL="JC4827W543 / NV3041A / GT911"
+            BOARD_TARGET="esp32s3"
+            BOARD_BUILD_DIR="$ROOT_DIR/build-jc4827w543"
+            BOARD_DEFAULTS_REL="sdkconfig.board-jc4827w543.defaults"
             ;;
         -h|--help|help)
             usage
@@ -115,6 +125,12 @@ run_firmware() {
     require_command idf.py
 
     rm -f "$BOARD_SDKCONFIG" "$BOARD_SDKCONFIG.old"
+    idf.py -C "$ROOT_DIR" \
+        -B "$BOARD_BUILD_DIR" \
+        -DSDKCONFIG="$BOARD_SDKCONFIG" \
+        -DSDKCONFIG_DEFAULTS="$BOARD_DEFAULTS" \
+        set-target "$BOARD_TARGET"
+
     if [ -n "${PROJECT_VER:-}" ]; then
         idf.py -C "$ROOT_DIR" \
             -B "$BOARD_BUILD_DIR" \

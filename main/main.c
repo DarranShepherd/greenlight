@@ -26,6 +26,61 @@ static app_state_t s_app_state;
 static app_settings_t s_state_settings_snapshot;
 static app_state_t s_state_snapshot;
 
+static lv_display_rotation_t get_display_rotation(const greenlight_display_profile_t *display)
+{
+    if (display == NULL) {
+        return LV_DISPLAY_ROTATION_0;
+    }
+
+    switch (display->rotation) {
+        case GREENLIGHT_DISPLAY_ROTATION_90:
+            return LV_DISPLAY_ROTATION_90;
+        case GREENLIGHT_DISPLAY_ROTATION_180:
+            return LV_DISPLAY_ROTATION_180;
+        case GREENLIGHT_DISPLAY_ROTATION_270:
+            return LV_DISPLAY_ROTATION_270;
+        case GREENLIGHT_DISPLAY_ROTATION_0:
+        default:
+            return LV_DISPLAY_ROTATION_0;
+    }
+}
+
+#if !CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
+static esp_err_t init_touch_with_retries(esp_lcd_touch_handle_t *touch_handle)
+{
+    static const TickType_t retry_delays[] = {
+        pdMS_TO_TICKS(80),
+        pdMS_TO_TICKS(160),
+        pdMS_TO_TICKS(320),
+    };
+    esp_err_t err = ESP_FAIL;
+
+    for (size_t attempt = 0; attempt <= sizeof(retry_delays) / sizeof(retry_delays[0]); ++attempt) {
+        err = touch_init(touch_handle);
+        if (err == ESP_OK) {
+            if (attempt > 0) {
+                ESP_LOGI(TAG, "Touch init recovered on attempt %u", (unsigned int)(attempt + 1));
+            }
+            return ESP_OK;
+        }
+
+        if (attempt == sizeof(retry_delays) / sizeof(retry_delays[0])) {
+            break;
+        }
+
+        ESP_LOGW(
+            TAG,
+            "Touch init attempt %u failed: %s. Retrying...",
+            (unsigned int)(attempt + 1),
+            esp_err_to_name(err)
+        );
+        vTaskDelay(retry_delays[attempt]);
+    }
+
+    return err;
+}
+#endif
+
 static void update_startup_stage(app_state_t *state, bool wifi_connected)
 {
     if (state == NULL) {
@@ -111,18 +166,22 @@ void app_main(void)
     ESP_LOGI(TAG, "LVGL display initialized");
 
     ESP_RETURN_VOID_ON_FALSE(lvgl_port_lock(1000), TAG, "lock LVGL for display rotation");
-    lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
+    lv_display_set_rotation(display, get_display_rotation(&board_profile->display));
     lvgl_port_unlock();
     ESP_LOGI(TAG, "LVGL display rotation applied");
 
 #if !CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
 
     touch_set_calibration(&s_settings.touch_calibration);
-    ESP_ERROR_CHECK(touch_init(&touch_handle));
-    touch_config.disp = display;
-    touch_config.handle = touch_handle;
-    touch_input = lvgl_port_add_touch(&touch_config);
-    ESP_RETURN_VOID_ON_FALSE(touch_input != NULL, TAG, "register touch input");
+    esp_err_t touch_err = init_touch_with_retries(&touch_handle);
+    if (touch_err != ESP_OK) {
+        ESP_LOGW(TAG, "Touch init failed, continuing without touch input: %s", esp_err_to_name(touch_err));
+    } else {
+        touch_config.disp = display;
+        touch_config.handle = touch_handle;
+        touch_input = lvgl_port_add_touch(&touch_config);
+        ESP_RETURN_VOID_ON_FALSE(touch_input != NULL, TAG, "register touch input");
+    }
 #endif
 
     app_state_get_settings(&s_app_state, &s_state_settings_snapshot);

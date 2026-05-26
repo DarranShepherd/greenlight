@@ -5,6 +5,7 @@ idf_component_register(
         "board_profile.c"
         "docs_screenshot.c"
         "lcd.c"
+        "lcd_qspi_io.c"
         "lv_font_montserrat_20_numeric.c"
         "lv_font_montserrat_28_numeric.c"
         "main.c"
@@ -33,6 +34,7 @@ idf_component_register(
         esp_netif
         esp_https_ota
         esp_driver_gpio
+        esp_driver_i2c
         esp_driver_ledc
         esp_driver_spi
         esp_http_client

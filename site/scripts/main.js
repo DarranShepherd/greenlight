@@ -30,6 +30,11 @@ const BOARDS = {
 		label: 'ESP32-32E (ST7789) — 3.2"',
 		chipFamily: 'ESP32',
 		firmware: 'firmware/firmware-esp32_32e_st7789-merged.bin'
+	},
+	jc4827w543: {
+		label: 'JC4827W543 (experimental) — 4.3"',
+		chipFamily: 'ESP32-S3',
+		firmware: 'firmware/firmware-jc4827w543-merged.bin'
 	}
 };
 

@@ -47,6 +47,7 @@ jobs:
           build_board esp32_2432s028_ili9341
           build_board esp32_2432s028_st7789
           build_board esp32_32e_st7789
+          build_board jc4827w543
 
       - name: Generate OTA metadata
         shell: bash
@@ -61,6 +62,7 @@ jobs:
             --variant esp32_2432s028_ili9341=dist/firmware-esp32_2432s028_ili9341.bin \
             --variant esp32_2432s028_st7789=dist/firmware-esp32_2432s028_st7789.bin \
             --variant esp32_32e_st7789=dist/firmware-esp32_32e_st7789.bin \
+            --variant jc4827w543=dist/firmware-jc4827w543.bin \
             --output dist/metadata.json
 
       - name: Publish GitHub Release assets
@@ -70,8 +72,10 @@ jobs:
             dist/firmware-esp32_2432s028_ili9341.bin
             dist/firmware-esp32_2432s028_st7789.bin
             dist/firmware-esp32_32e_st7789.bin
+            dist/firmware-jc4827w543.bin
             dist/firmware-esp32_2432s028_ili9341-merged.bin
             dist/firmware-esp32_2432s028_st7789-merged.bin
             dist/firmware-esp32_32e_st7789-merged.bin
+            dist/firmware-jc4827w543-merged.bin
             dist/metadata.json
           overwrite_files: true

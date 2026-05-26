@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "board_profile.h"
 #include "numeric_fonts.h"
 #include "tariff_model.h"
 
@@ -18,6 +19,17 @@ typedef struct {
     lv_color_t footer_bg;
     bool pulse;
 } primary_palette_t;
+
+static lv_coord_t get_primary_hero_card_height(void)
+{
+    const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
+
+    if (board_profile != NULL) {
+        return board_profile->ui.primary_hero_card_height;
+    }
+
+    return 100;
+}
 
 static void format_compact_time(char *buffer, size_t buffer_size, time_t local_time)
 {
@@ -500,7 +512,7 @@ void ui_primary_create(lv_obj_t *tile, ui_router_view_t *view)
 
     view->primary_hero_card = lv_obj_create(tile);
     lv_obj_set_width(view->primary_hero_card, lv_pct(100));
-    lv_obj_set_height(view->primary_hero_card, 100);
+    lv_obj_set_height(view->primary_hero_card, get_primary_hero_card_height());
     lv_obj_set_style_radius(view->primary_hero_card, 16, 0);
     lv_obj_set_style_border_width(view->primary_hero_card, 0, 0);
     lv_obj_set_style_pad_all(view->primary_hero_card, 8, 0);

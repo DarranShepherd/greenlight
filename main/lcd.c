@@ -4,6 +4,7 @@
 #include <driver/spi_master.h>
 #include <esp_check.h>
 #include <esp_lcd_ili9341.h>
+#include <esp_lcd_nv3041.h>
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_st7789.h>
@@ -12,6 +13,7 @@
 #include <esp_lvgl_port.h>
 
 #include "board_profile.h"
+#include "lcd_qspi_io.h"
 
 static const char *TAG = "lcd";
 
@@ -125,17 +127,32 @@ esp_err_t lcd_init(esp_lcd_panel_io_handle_t *panel_io, esp_lcd_panel_handle_t *
         .bits_per_pixel = display->bits_per_pixel,
     };
 
-    ESP_RETURN_ON_ERROR(spi_bus_initialize(display->spi_host, &bus_config, SPI_DMA_CH_AUTO), TAG, "initialize LCD SPI bus");
-    ESP_RETURN_ON_ERROR(
-        esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)display->spi_host, &io_config, panel_io),
-        TAG,
-        "create LCD IO handle"
-    );
+    if (display->bus_type == GREENLIGHT_DISPLAY_BUS_QSPI) {
+        const spi_bus_config_t qspi_bus_config = {
+            .mosi_io_num = display->spi_data0,
+            .miso_io_num = display->spi_data1,
+            .sclk_io_num = display->spi_clk,
+            .quadwp_io_num = display->spi_data2,
+            .quadhd_io_num = display->spi_data3,
+            .max_transfer_sz = draw_buffer_size * sizeof(uint16_t),
+        };
 
-    if (display->controller == GREENLIGHT_LCD_CONTROLLER_ST7789) {
-        ESP_RETURN_ON_ERROR(esp_lcd_new_panel_st7789(*panel_io, &panel_config, panel), TAG, "create LCD panel");
+        ESP_RETURN_ON_ERROR(spi_bus_initialize(display->spi_host, &qspi_bus_config, SPI_DMA_CH_AUTO), TAG, "initialize LCD QSPI bus");
+        ESP_RETURN_ON_ERROR(greenlight_lcd_new_panel_io_qspi(display, panel_io), TAG, "create LCD QSPI IO handle");
+        ESP_RETURN_ON_ERROR(esp_lcd_new_panel_nv3041(*panel_io, &panel_config, panel), TAG, "create NV3041A panel");
     } else {
-        ESP_RETURN_ON_ERROR(esp_lcd_new_panel_ili9341(*panel_io, &panel_config, panel), TAG, "create LCD panel");
+        ESP_RETURN_ON_ERROR(spi_bus_initialize(display->spi_host, &bus_config, SPI_DMA_CH_AUTO), TAG, "initialize LCD SPI bus");
+        ESP_RETURN_ON_ERROR(
+            esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)display->spi_host, &io_config, panel_io),
+            TAG,
+            "create LCD IO handle"
+        );
+
+        if (display->controller == GREENLIGHT_LCD_CONTROLLER_ST7789) {
+            ESP_RETURN_ON_ERROR(esp_lcd_new_panel_st7789(*panel_io, &panel_config, panel), TAG, "create LCD panel");
+        } else {
+            ESP_RETURN_ON_ERROR(esp_lcd_new_panel_ili9341(*panel_io, &panel_config, panel), TAG, "create LCD panel");
+        }
     }
 
     ESP_RETURN_ON_ERROR(esp_lcd_panel_reset(*panel), TAG, "reset LCD panel");
@@ -147,6 +164,10 @@ esp_err_t lcd_init(esp_lcd_panel_io_handle_t *panel_io, esp_lcd_panel_handle_t *
             TAG,
             "apply LCD initialization sequence"
         );
+    }
+
+    if (display->controller == GREENLIGHT_LCD_CONTROLLER_NV3041A) {
+        ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(*panel, false), TAG, "set LCD color inversion");
     }
 
     ESP_RETURN_ON_ERROR(esp_lcd_panel_mirror(*panel, display->mirror_x, display->mirror_y), TAG, "mirror LCD panel");

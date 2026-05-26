@@ -39,6 +39,14 @@ static const greenlight_lcd_init_cmd_t s_esp32_2432s028_st7789_init_cmds[] = {
     {.command = 0x20, .data = NULL, .data_size = 0},
 };
 
+static const uint8_t s_jc4827w543_scan_vres[] = {0x00, 0x7F};
+static const uint8_t s_jc4827w543_scan_hres[] = {0x01, 0xDF};
+
+static const greenlight_lcd_init_cmd_t s_jc4827w543_init_cmds[] = {
+    {.command = 0x4A, .data = s_jc4827w543_scan_vres, .data_size = sizeof(s_jc4827w543_scan_vres)},
+    {.command = 0x4B, .data = s_jc4827w543_scan_hres, .data_size = sizeof(s_jc4827w543_scan_hres)},
+};
+
 static const greenlight_board_profile_t s_esp32_2432s028_ili9341 __attribute__((unused)) = {
     .id = "esp32_2432s028_ili9341",
     .display_name = "ESP32-2432S028 / ILI9341",
@@ -48,6 +56,8 @@ static const greenlight_board_profile_t s_esp32_2432s028_ili9341 __attribute__((
         .bits_per_pixel = 16,
         .draw_buffer_lines = 30,
         .double_buffer = true,
+        .rotation = GREENLIGHT_DISPLAY_ROTATION_90,
+        .bus_type = GREENLIGHT_DISPLAY_BUS_SPI,
         .pixel_clock_hz = 20 * 1000 * 1000,
         .cmd_bits = 8,
         .param_bits = 8,
@@ -55,6 +65,10 @@ static const greenlight_board_profile_t s_esp32_2432s028_ili9341 __attribute__((
         .spi_clk = GPIO_NUM_14,
         .spi_mosi = GPIO_NUM_13,
         .spi_miso = GPIO_NUM_12,
+        .spi_data0 = GPIO_NUM_NC,
+        .spi_data1 = GPIO_NUM_NC,
+        .spi_data2 = GPIO_NUM_NC,
+        .spi_data3 = GPIO_NUM_NC,
         .cs = GPIO_NUM_15,
         .dc = GPIO_NUM_2,
         .reset = GPIO_NUM_4,
@@ -71,10 +85,16 @@ static const greenlight_board_profile_t s_esp32_2432s028_ili9341 __attribute__((
         .init_cmd_count = 0,
     },
     .touch = {
+        .bus_type = GREENLIGHT_TOUCH_BUS_SPI,
+        .controller = GREENLIGHT_TOUCH_CONTROLLER_XPT2046,
         .spi_host = SPI3_HOST,
-        .spi_clk = GPIO_NUM_25,
+        .spi_clk = (gpio_num_t)25,
         .spi_mosi = GPIO_NUM_32,
         .spi_miso = GPIO_NUM_39,
+        .i2c_port = -1,
+        .i2c_scl = GPIO_NUM_NC,
+        .i2c_sda = GPIO_NUM_NC,
+        .i2c_address = 0,
         .cs = GPIO_NUM_33,
         .irq = GPIO_NUM_NC,
         .reset = GPIO_NUM_NC,
@@ -84,6 +104,11 @@ static const greenlight_board_profile_t s_esp32_2432s028_ili9341 __attribute__((
         .mirror_y = false,
         .left_edge_x_correction_px = 16,
         .y_offset_px = 0,
+    },
+    .ui = {
+        .primary_hero_card_height = 100,
+        .detail_chart_shell_height = 94,
+        .detail_chart_bar_row_height = 70,
     },
 };
 
@@ -96,6 +121,8 @@ static const greenlight_board_profile_t s_esp32_32e_st7789 __attribute__((unused
         .bits_per_pixel = 16,
         .draw_buffer_lines = 30,
         .double_buffer = true,
+        .rotation = GREENLIGHT_DISPLAY_ROTATION_90,
+        .bus_type = GREENLIGHT_DISPLAY_BUS_SPI,
         .pixel_clock_hz = 20 * 1000 * 1000,
         .cmd_bits = 8,
         .param_bits = 8,
@@ -103,6 +130,10 @@ static const greenlight_board_profile_t s_esp32_32e_st7789 __attribute__((unused
         .spi_clk = GPIO_NUM_14,
         .spi_mosi = GPIO_NUM_13,
         .spi_miso = GPIO_NUM_12,
+        .spi_data0 = GPIO_NUM_NC,
+        .spi_data1 = GPIO_NUM_NC,
+        .spi_data2 = GPIO_NUM_NC,
+        .spi_data3 = GPIO_NUM_NC,
         .cs = GPIO_NUM_15,
         .dc = GPIO_NUM_2,
         .reset = GPIO_NUM_NC,
@@ -119,10 +150,16 @@ static const greenlight_board_profile_t s_esp32_32e_st7789 __attribute__((unused
         .init_cmd_count = sizeof(s_esp32_32e_st7789_init_cmds) / sizeof(s_esp32_32e_st7789_init_cmds[0]),
     },
     .touch = {
+        .bus_type = GREENLIGHT_TOUCH_BUS_SPI,
+        .controller = GREENLIGHT_TOUCH_CONTROLLER_XPT2046,
         .spi_host = SPI2_HOST,
         .spi_clk = GPIO_NUM_14,
         .spi_mosi = GPIO_NUM_13,
         .spi_miso = GPIO_NUM_12,
+        .i2c_port = -1,
+        .i2c_scl = GPIO_NUM_NC,
+        .i2c_sda = GPIO_NUM_NC,
+        .i2c_address = 0,
         .cs = GPIO_NUM_33,
         .irq = GPIO_NUM_NC,
         .reset = GPIO_NUM_NC,
@@ -132,6 +169,11 @@ static const greenlight_board_profile_t s_esp32_32e_st7789 __attribute__((unused
         .mirror_y = true,
         .left_edge_x_correction_px = 16,
         .y_offset_px = 0,
+    },
+    .ui = {
+        .primary_hero_card_height = 100,
+        .detail_chart_shell_height = 94,
+        .detail_chart_bar_row_height = 70,
     },
 };
 
@@ -144,6 +186,8 @@ static const greenlight_board_profile_t s_esp32_2432s028_st7789 __attribute__((u
         .bits_per_pixel = 16,
         .draw_buffer_lines = 30,
         .double_buffer = true,
+        .rotation = GREENLIGHT_DISPLAY_ROTATION_90,
+        .bus_type = GREENLIGHT_DISPLAY_BUS_SPI,
         .pixel_clock_hz = 20 * 1000 * 1000,
         .cmd_bits = 8,
         .param_bits = 8,
@@ -151,6 +195,10 @@ static const greenlight_board_profile_t s_esp32_2432s028_st7789 __attribute__((u
         .spi_clk = GPIO_NUM_14,
         .spi_mosi = GPIO_NUM_13,
         .spi_miso = GPIO_NUM_12,
+        .spi_data0 = GPIO_NUM_NC,
+        .spi_data1 = GPIO_NUM_NC,
+        .spi_data2 = GPIO_NUM_NC,
+        .spi_data3 = GPIO_NUM_NC,
         .cs = GPIO_NUM_15,
         .dc = GPIO_NUM_2,
         .reset = GPIO_NUM_4,
@@ -167,10 +215,16 @@ static const greenlight_board_profile_t s_esp32_2432s028_st7789 __attribute__((u
         .init_cmd_count = sizeof(s_esp32_2432s028_st7789_init_cmds) / sizeof(s_esp32_2432s028_st7789_init_cmds[0]),
     },
     .touch = {
+        .bus_type = GREENLIGHT_TOUCH_BUS_SPI,
+        .controller = GREENLIGHT_TOUCH_CONTROLLER_XPT2046,
         .spi_host = SPI3_HOST,
-        .spi_clk = GPIO_NUM_25,
+        .spi_clk = (gpio_num_t)25,
         .spi_mosi = GPIO_NUM_32,
         .spi_miso = GPIO_NUM_39,
+        .i2c_port = -1,
+        .i2c_scl = GPIO_NUM_NC,
+        .i2c_sda = GPIO_NUM_NC,
+        .i2c_address = 0,
         .cs = GPIO_NUM_33,
         .irq = GPIO_NUM_NC,
         .reset = GPIO_NUM_NC,
@@ -181,12 +235,84 @@ static const greenlight_board_profile_t s_esp32_2432s028_st7789 __attribute__((u
         .left_edge_x_correction_px = 16,
         .y_offset_px = 0,
     },
+    .ui = {
+        .primary_hero_card_height = 100,
+        .detail_chart_shell_height = 94,
+        .detail_chart_bar_row_height = 70,
+    },
+};
+
+static const greenlight_board_profile_t s_jc4827w543 __attribute__((unused)) = {
+    .id = "jc4827w543",
+    .display_name = "JC4827W543 / NV3041A / GT911",
+    .display = {
+        .h_res = 480,
+        .v_res = 272,
+        .bits_per_pixel = 16,
+        .draw_buffer_lines = 8,
+        .double_buffer = true,
+        .rotation = GREENLIGHT_DISPLAY_ROTATION_180,
+        .bus_type = GREENLIGHT_DISPLAY_BUS_QSPI,
+        .pixel_clock_hz = 20 * 1000 * 1000,
+        .cmd_bits = 8,
+        .param_bits = 8,
+        .spi_host = SPI2_HOST,
+        .spi_clk = (gpio_num_t)47,
+        .spi_mosi = GPIO_NUM_NC,
+        .spi_miso = GPIO_NUM_NC,
+        .spi_data0 = GPIO_NUM_21,
+        .spi_data1 = (gpio_num_t)48,
+        .spi_data2 = (gpio_num_t)40,
+        .spi_data3 = GPIO_NUM_39,
+        .cs = (gpio_num_t)45,
+        .dc = GPIO_NUM_NC,
+        .reset = GPIO_NUM_NC,
+        .backlight = GPIO_NUM_1,
+        .backlight_ledc_channel = LEDC_CHANNEL_1,
+        .backlight_ledc_timer = LEDC_TIMER_1,
+        .backlight_output_invert = false,
+        .mirror_x = true,
+        .mirror_y = true,
+        .swap_bytes = true,
+        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB,
+        .controller = GREENLIGHT_LCD_CONTROLLER_NV3041A,
+        .init_cmds = s_jc4827w543_init_cmds,
+        .init_cmd_count = sizeof(s_jc4827w543_init_cmds) / sizeof(s_jc4827w543_init_cmds[0]),
+    },
+    .touch = {
+        .bus_type = GREENLIGHT_TOUCH_BUS_I2C,
+        .controller = GREENLIGHT_TOUCH_CONTROLLER_GT911,
+        .spi_host = SPI2_HOST,
+        .spi_clk = GPIO_NUM_NC,
+        .spi_mosi = GPIO_NUM_NC,
+        .spi_miso = GPIO_NUM_NC,
+        .i2c_port = I2C_NUM_0,
+        .i2c_scl = GPIO_NUM_4,
+        .i2c_sda = GPIO_NUM_8,
+        .i2c_address = 0x5D,
+        .cs = GPIO_NUM_NC,
+        .irq = GPIO_NUM_3,
+        .reset = GPIO_NUM_38,
+        .clock_hz = 400000,
+        .swap_xy = false,
+        .mirror_x = true,
+        .mirror_y = true,
+        .left_edge_x_correction_px = 0,
+        .y_offset_px = 0,
+    },
+    .ui = {
+        .primary_hero_card_height = 136,
+        .detail_chart_shell_height = 122,
+        .detail_chart_bar_row_height = 98,
+    },
 };
 
 const greenlight_board_profile_t *greenlight_board_profile_get(void)
 {
 #ifdef CONFIG_GREENLIGHT_BOARD_PROFILE_ESP32_32E_ST7789
     return &s_esp32_32e_st7789;
+#elif defined(CONFIG_GREENLIGHT_BOARD_PROFILE_JC4827W543)
+    return &s_jc4827w543;
 #elif defined(CONFIG_GREENLIGHT_BOARD_PROFILE_ESP32_2432S028_ST7789)
     return &s_esp32_2432s028_st7789;
 #else

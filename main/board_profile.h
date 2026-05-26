@@ -16,6 +16,13 @@ typedef enum {
 } greenlight_display_bus_t;
 
 typedef enum {
+    GREENLIGHT_DISPLAY_ROTATION_0 = 0,
+    GREENLIGHT_DISPLAY_ROTATION_90,
+    GREENLIGHT_DISPLAY_ROTATION_180,
+    GREENLIGHT_DISPLAY_ROTATION_270,
+} greenlight_display_rotation_t;
+
+typedef enum {
     GREENLIGHT_LCD_CONTROLLER_ILI9341 = 0,
     GREENLIGHT_LCD_CONTROLLER_ST7789,
     GREENLIGHT_LCD_CONTROLLER_NV3041A,
@@ -43,6 +50,7 @@ typedef struct {
     uint8_t bits_per_pixel;
     uint16_t draw_buffer_lines;
     bool double_buffer;
+    greenlight_display_rotation_t rotation;
     greenlight_display_bus_t bus_type;
     uint32_t pixel_clock_hz;
     uint8_t cmd_bits;
@@ -94,10 +102,17 @@ typedef struct {
 } greenlight_touch_profile_t;
 
 typedef struct {
+    uint16_t primary_hero_card_height;
+    uint16_t detail_chart_shell_height;
+    uint16_t detail_chart_bar_row_height;
+} greenlight_ui_profile_t;
+
+typedef struct {
     const char *id;
     const char *display_name;
     greenlight_display_profile_t display;
     greenlight_touch_profile_t touch;
+    greenlight_ui_profile_t ui;
 } greenlight_board_profile_t;
 
 const greenlight_board_profile_t *greenlight_board_profile_get(void);

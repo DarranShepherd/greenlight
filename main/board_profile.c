@@ -56,6 +56,7 @@ static const greenlight_board_profile_t s_esp32_2432s028_ili9341 __attribute__((
         .bits_per_pixel = 16,
         .draw_buffer_lines = 30,
         .double_buffer = true,
+        .rotation = GREENLIGHT_DISPLAY_ROTATION_90,
         .bus_type = GREENLIGHT_DISPLAY_BUS_SPI,
         .pixel_clock_hz = 20 * 1000 * 1000,
         .cmd_bits = 8,
@@ -104,6 +105,11 @@ static const greenlight_board_profile_t s_esp32_2432s028_ili9341 __attribute__((
         .left_edge_x_correction_px = 16,
         .y_offset_px = 0,
     },
+    .ui = {
+        .primary_hero_card_height = 100,
+        .detail_chart_shell_height = 94,
+        .detail_chart_bar_row_height = 70,
+    },
 };
 
 static const greenlight_board_profile_t s_esp32_32e_st7789 __attribute__((unused)) = {
@@ -115,6 +121,7 @@ static const greenlight_board_profile_t s_esp32_32e_st7789 __attribute__((unused
         .bits_per_pixel = 16,
         .draw_buffer_lines = 30,
         .double_buffer = true,
+        .rotation = GREENLIGHT_DISPLAY_ROTATION_90,
         .bus_type = GREENLIGHT_DISPLAY_BUS_SPI,
         .pixel_clock_hz = 20 * 1000 * 1000,
         .cmd_bits = 8,
@@ -163,6 +170,11 @@ static const greenlight_board_profile_t s_esp32_32e_st7789 __attribute__((unused
         .left_edge_x_correction_px = 16,
         .y_offset_px = 0,
     },
+    .ui = {
+        .primary_hero_card_height = 100,
+        .detail_chart_shell_height = 94,
+        .detail_chart_bar_row_height = 70,
+    },
 };
 
 static const greenlight_board_profile_t s_esp32_2432s028_st7789 __attribute__((unused)) = {
@@ -174,6 +186,7 @@ static const greenlight_board_profile_t s_esp32_2432s028_st7789 __attribute__((u
         .bits_per_pixel = 16,
         .draw_buffer_lines = 30,
         .double_buffer = true,
+        .rotation = GREENLIGHT_DISPLAY_ROTATION_90,
         .bus_type = GREENLIGHT_DISPLAY_BUS_SPI,
         .pixel_clock_hz = 20 * 1000 * 1000,
         .cmd_bits = 8,
@@ -222,6 +235,11 @@ static const greenlight_board_profile_t s_esp32_2432s028_st7789 __attribute__((u
         .left_edge_x_correction_px = 16,
         .y_offset_px = 0,
     },
+    .ui = {
+        .primary_hero_card_height = 100,
+        .detail_chart_shell_height = 94,
+        .detail_chart_bar_row_height = 70,
+    },
 };
 
 static const greenlight_board_profile_t s_jc4827w543 __attribute__((unused)) = {
@@ -233,19 +251,20 @@ static const greenlight_board_profile_t s_jc4827w543 __attribute__((unused)) = {
         .bits_per_pixel = 16,
         .draw_buffer_lines = 8,
         .double_buffer = true,
+        .rotation = GREENLIGHT_DISPLAY_ROTATION_180,
         .bus_type = GREENLIGHT_DISPLAY_BUS_QSPI,
         .pixel_clock_hz = 20 * 1000 * 1000,
         .cmd_bits = 8,
         .param_bits = 8,
         .spi_host = SPI2_HOST,
-        .spi_clk = GPIO_NUM_47,
+        .spi_clk = (gpio_num_t)47,
         .spi_mosi = GPIO_NUM_NC,
         .spi_miso = GPIO_NUM_NC,
         .spi_data0 = GPIO_NUM_21,
-        .spi_data1 = GPIO_NUM_48,
-        .spi_data2 = GPIO_NUM_40,
+        .spi_data1 = (gpio_num_t)48,
+        .spi_data2 = (gpio_num_t)40,
         .spi_data3 = GPIO_NUM_39,
-        .cs = GPIO_NUM_45,
+        .cs = (gpio_num_t)45,
         .dc = GPIO_NUM_NC,
         .reset = GPIO_NUM_NC,
         .backlight = GPIO_NUM_1,
@@ -280,6 +299,11 @@ static const greenlight_board_profile_t s_jc4827w543 __attribute__((unused)) = {
         .mirror_y = true,
         .left_edge_x_correction_px = 0,
         .y_offset_px = 0,
+    },
+    .ui = {
+        .primary_hero_card_height = 136,
+        .detail_chart_shell_height = 122,
+        .detail_chart_bar_row_height = 98,
     },
 };
 

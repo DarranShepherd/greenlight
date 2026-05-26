@@ -19,6 +19,7 @@ jobs:
           - esp32_2432s028_ili9341
           - esp32_2432s028_st7789
           - esp32_32e_st7789
+          - jc4827w543
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

@@ -3,9 +3,33 @@
 #include <stdio.h>
 #include <time.h>
 
+#include "board_profile.h"
+
 #define DETAIL_DAY_INDEX_TODAY 0
 #define DETAIL_DAY_INDEX_TOMORROW 1
 #define DETAIL_DAY_COUNT 2
+
+static lv_coord_t get_detail_chart_shell_height(void)
+{
+    const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
+
+    if (board_profile != NULL) {
+        return board_profile->ui.detail_chart_shell_height;
+    }
+
+    return 94;
+}
+
+static lv_coord_t get_detail_chart_bar_row_height(void)
+{
+    const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
+
+    if (board_profile != NULL) {
+        return board_profile->ui.detail_chart_bar_row_height;
+    }
+
+    return 70;
+}
 
 static void style_detail_stat_label(lv_obj_t *label, const char *caption, float value, lv_color_t color)
 {
@@ -251,7 +275,7 @@ void ui_detail_create(lv_obj_t *tile, ui_router_view_t *view)
 
         lv_obj_t *chart_shell = lv_obj_create(panel);
         lv_obj_set_width(chart_shell, lv_pct(100));
-        lv_obj_set_height(chart_shell, 94);
+        lv_obj_set_height(chart_shell, get_detail_chart_shell_height());
         lv_obj_set_style_bg_opa(chart_shell, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(chart_shell, 0, 0);
         lv_obj_set_style_pad_top(chart_shell, 4, 0);
@@ -266,7 +290,7 @@ void ui_detail_create(lv_obj_t *tile, ui_router_view_t *view)
 
         view->detail_day_bar_rows[day_index] = lv_obj_create(chart_shell);
         lv_obj_set_width(view->detail_day_bar_rows[day_index], lv_pct(100));
-        lv_obj_set_height(view->detail_day_bar_rows[day_index], 70);
+        lv_obj_set_height(view->detail_day_bar_rows[day_index], get_detail_chart_bar_row_height());
         lv_obj_set_style_bg_opa(view->detail_day_bar_rows[day_index], LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(view->detail_day_bar_rows[day_index], 0, 0);
         lv_obj_set_style_pad_top(view->detail_day_bar_rows[day_index], 0, 0);

@@ -3,6 +3,7 @@
 #include <driver/i2c_master.h>
 #include <driver/spi_master.h>
 #include <esp_check.h>
+#include <esp_lcd_panel_io.h>
 #include <esp_lcd_touch_gt911.h>
 #include <esp_lcd_touch_xpt2046.h>
 #include <string.h>
@@ -144,9 +145,14 @@ esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
     const greenlight_display_profile_t *display = &board_profile->display;
     const greenlight_touch_profile_t *touch = &board_profile->touch;
     esp_lcd_panel_io_handle_t touch_io = NULL;
+    esp_err_t ret = ESP_OK;
 
     s_touch_profile = *touch;
     s_has_last_raw_point = false;
+
+    if (touch_handle != NULL) {
+        *touch_handle = NULL;
+    }
 
     const esp_lcd_touch_config_t touch_config = {
         .x_max = display->h_res,
@@ -174,14 +180,32 @@ esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
             .clk_source = I2C_CLK_SRC_DEFAULT,
         };
         esp_lcd_panel_io_i2c_config_t io_config = ESP_LCD_TOUCH_IO_I2C_GT911_CONFIG();
+        esp_lcd_touch_io_gt911_config_t gt911_config = {
+            .dev_addr = touch->i2c_address,
+        };
+        esp_lcd_touch_config_t gt911_touch_config = touch_config;
 
         io_config.dev_addr = touch->i2c_address;
         io_config.scl_speed_hz = touch->clock_hz;
+        gt911_touch_config.driver_data = &gt911_config;
 
-        ESP_RETURN_ON_ERROR(i2c_new_master_bus(&i2c_config, &i2c_handle), TAG, "initialize touch I2C bus");
-        ESP_RETURN_ON_ERROR(esp_lcd_new_panel_io_i2c(i2c_handle, &io_config, &touch_io), TAG, "create touch IO handle");
-        ESP_RETURN_ON_ERROR(esp_lcd_touch_new_i2c_gt911(touch_io, &touch_config, touch_handle), TAG, "create GT911 touch handle");
+        ESP_GOTO_ON_ERROR(i2c_new_master_bus(&i2c_config, &i2c_handle), err_i2c, TAG, "initialize touch I2C bus");
+        ESP_GOTO_ON_ERROR(esp_lcd_new_panel_io_i2c(i2c_handle, &io_config, &touch_io), err_i2c, TAG, "create touch IO handle");
+        ESP_GOTO_ON_ERROR(esp_lcd_touch_new_i2c_gt911(touch_io, &gt911_touch_config, touch_handle), err_i2c, TAG, "create GT911 touch handle");
         return ESP_OK;
+
+err_i2c:
+        if (touch_handle != NULL && *touch_handle != NULL) {
+            esp_lcd_touch_del(*touch_handle);
+            *touch_handle = NULL;
+        }
+        if (touch_io != NULL) {
+            esp_lcd_panel_io_del(touch_io);
+        }
+        if (i2c_handle != NULL) {
+            i2c_del_master_bus(i2c_handle);
+        }
+        return ret;
     }
 
     const spi_bus_config_t bus_config = {

@@ -18,14 +18,17 @@ module.exports = {
 				outline: '#537e6c',
 				'outline-variant': '#245040',
 				primary: '#f7ffba',
-				'primary-container': '#e0f800',
+					'primary-container': '#eeff00',
 				'on-primary-container': '#525c00',
 				secondary: '#f7e54e',
 				'secondary-container': '#695f00',
 				tertiary: '#ffe390',
 				error: '#ff7351',
-				'cheap-green': '#39d98a',
-				'expensive-red': '#ff7351'
+					'super-cheap-green': '#73c73d',
+					'cheap-green': '#62c0a3',
+					'normal-yellow': '#f7ec4c',
+					'expensive-orange': '#eb812b',
+					'very-expensive-red': '#e43117'
 			},
 			fontFamily: {
 				headline: ['Manrope', 'sans-serif'],

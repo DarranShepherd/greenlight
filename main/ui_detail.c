@@ -49,6 +49,11 @@ static void style_detail_stat_label(lv_obj_t *label, const char *caption, float 
     lv_label_set_text(label, text);
 }
 
+static lv_color_t get_detail_stat_color_for_price(float value)
+{
+    return ui_primary_get_band_fill_color(tariff_model_classify_price(value));
+}
+
 static void update_detail_time_marker(const app_state_t *state, ui_router_view_t *view)
 {
     struct tm local_tm = {0};
@@ -182,9 +187,9 @@ static void update_detail_day_panel(
             lv_obj_add_flag(zero_line, LV_OBJ_FLAG_HIDDEN);
         }
 
-        style_detail_stat_label(view->detail_day_min_labels[index], "Min", 0.0f, ui_primary_get_band_fill_color(TARIFF_BAND_CHEAP));
-        style_detail_stat_label(view->detail_day_avg_labels[index], "Avg", 0.0f, ui_primary_get_band_fill_color(TARIFF_BAND_NORMAL));
-        style_detail_stat_label(view->detail_day_max_labels[index], "Max", 0.0f, ui_primary_get_band_fill_color(TARIFF_BAND_EXPENSIVE));
+        style_detail_stat_label(view->detail_day_min_labels[index], "Min", 0.0f, get_detail_stat_color_for_price(0.0f));
+        style_detail_stat_label(view->detail_day_avg_labels[index], "Avg", 0.0f, get_detail_stat_color_for_price(0.0f));
+        style_detail_stat_label(view->detail_day_max_labels[index], "Max", 0.0f, get_detail_stat_color_for_price(0.0f));
         return;
     }
 
@@ -251,9 +256,9 @@ static void update_detail_day_panel(
         lv_obj_clear_flag(bar, LV_OBJ_FLAG_HIDDEN);
     }
 
-    style_detail_stat_label(view->detail_day_min_labels[index], "Min", day_view->min_price, ui_primary_get_band_fill_color(TARIFF_BAND_CHEAP));
-    style_detail_stat_label(view->detail_day_avg_labels[index], "Avg", day_view->avg_price, ui_primary_get_band_fill_color(TARIFF_BAND_NORMAL));
-    style_detail_stat_label(view->detail_day_max_labels[index], "Max", day_view->max_price, ui_primary_get_band_fill_color(TARIFF_BAND_EXPENSIVE));
+    style_detail_stat_label(view->detail_day_min_labels[index], "Min", day_view->min_price, get_detail_stat_color_for_price(day_view->min_price));
+    style_detail_stat_label(view->detail_day_avg_labels[index], "Avg", day_view->avg_price, get_detail_stat_color_for_price(day_view->avg_price));
+    style_detail_stat_label(view->detail_day_max_labels[index], "Max", day_view->max_price, get_detail_stat_color_for_price(day_view->max_price));
 }
 
 void ui_detail_update(const app_state_t *state, ui_router_view_t *view)

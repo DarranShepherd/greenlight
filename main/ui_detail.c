@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include "board_profile.h"
+#include "histogram_layout.h"
 
 #define DETAIL_DAY_INDEX_TODAY 0
 #define DETAIL_DAY_INDEX_TOMORROW 1
@@ -90,17 +91,70 @@ static void update_detail_time_marker(const app_state_t *state, ui_router_view_t
     lv_obj_clear_flag(today_marker, LV_OBJ_FLAG_HIDDEN);
 }
 
-static void update_detail_day_panel(ui_router_view_t *view, uint8_t index, const char *title, const app_tariff_day_view_t *day_view, bool two_day_layout)
+static bool prepare_shared_detail_chart_layout(
+    const app_tariff_day_view_t *today,
+    const app_tariff_day_view_t *tomorrow,
+    lv_coord_t chart_height,
+    histogram_layout_t *layout)
 {
-    lv_obj_t *panel = NULL;
-    lv_coord_t chart_height = 72;
+    bool have_range = false;
+    float min_price = 0.0f;
     float max_price = 0.0f;
+
+    if (layout == NULL || chart_height <= 0) {
+        return false;
+    }
+
+    if (today != NULL && today->available && today->slot_count > 0) {
+        min_price = today->min_price;
+        max_price = today->max_price;
+        have_range = true;
+    }
+
+    if (tomorrow != NULL && tomorrow->available && tomorrow->slot_count > 0) {
+        if (!have_range) {
+            min_price = tomorrow->min_price;
+            max_price = tomorrow->max_price;
+            have_range = true;
+        } else {
+            if (tomorrow->min_price < min_price) {
+                min_price = tomorrow->min_price;
+            }
+            if (tomorrow->max_price > max_price) {
+                max_price = tomorrow->max_price;
+            }
+        }
+    }
+
+    if (!have_range) {
+        return false;
+    }
+
+    return histogram_layout_prepare(min_price, max_price, chart_height, layout);
+}
+
+static void update_detail_day_panel(
+    ui_router_view_t *view,
+    uint8_t index,
+    const char *title,
+    const app_tariff_day_view_t *day_view,
+    bool two_day_layout,
+    const histogram_layout_t *shared_chart_layout)
+{
+    histogram_bar_layout_t bar_layout = {0};
+    lv_obj_t *panel = NULL;
+    lv_obj_t *bar_row = NULL;
+    lv_obj_t *zero_line = NULL;
+    lv_coord_t row_width = 0;
+    lv_coord_t bar_width = 4;
 
     if (index >= DETAIL_DAY_COUNT) {
         return;
     }
 
     panel = view->detail_day_panels[index];
+    bar_row = view->detail_day_bar_rows[index];
+    zero_line = view->detail_day_zero_lines[index];
     if (panel == NULL) {
         return;
     }
@@ -124,15 +178,50 @@ static void update_detail_day_panel(ui_router_view_t *view, uint8_t index, const
             }
         }
 
+        if (zero_line != NULL) {
+            lv_obj_add_flag(zero_line, LV_OBJ_FLAG_HIDDEN);
+        }
+
         style_detail_stat_label(view->detail_day_min_labels[index], "Min", 0.0f, ui_primary_get_band_fill_color(TARIFF_BAND_CHEAP));
         style_detail_stat_label(view->detail_day_avg_labels[index], "Avg", 0.0f, ui_primary_get_band_fill_color(TARIFF_BAND_NORMAL));
         style_detail_stat_label(view->detail_day_max_labels[index], "Max", 0.0f, ui_primary_get_band_fill_color(TARIFF_BAND_EXPENSIVE));
         return;
     }
 
-    max_price = day_view->max_price > 0.0f ? day_view->max_price : 1.0f;
-    if (max_price < 5.0f) {
-        max_price = 5.0f;
+    row_width = bar_row != NULL ? lv_obj_get_content_width(bar_row) : 0;
+    if (row_width <= 0 && bar_row != NULL) {
+        row_width = lv_obj_get_width(bar_row);
+    }
+    if (row_width <= 0) {
+        row_width = 1;
+    }
+
+    if (shared_chart_layout == NULL) {
+        return;
+    }
+
+    if (bar_row != NULL) {
+        bool zero_is_internal = shared_chart_layout->zero_y > 0 && shared_chart_layout->zero_y < shared_chart_layout->chart_height;
+
+        lv_obj_set_style_border_width(bar_row, zero_is_internal ? 0 : 1, 0);
+    }
+
+    if (zero_line != NULL) {
+        lv_coord_t zero_line_y = (lv_coord_t)shared_chart_layout->zero_y;
+
+        if (zero_line_y >= shared_chart_layout->chart_height) {
+            zero_line_y = shared_chart_layout->chart_height - 1;
+        }
+        if (zero_line_y < 0) {
+            zero_line_y = 0;
+        }
+
+        lv_obj_set_y(zero_line, zero_line_y);
+        if (shared_chart_layout->zero_y > 0 && shared_chart_layout->zero_y < shared_chart_layout->chart_height) {
+            lv_obj_clear_flag(zero_line, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(zero_line, LV_OBJ_FLAG_HIDDEN);
+        }
     }
 
     for (uint8_t slot_index = 0; slot_index < APP_TARIFF_DAY_SLOT_MAX; slot_index++) {
@@ -143,21 +232,20 @@ static void update_detail_day_panel(ui_router_view_t *view, uint8_t index, const
         }
 
         if (slot_index >= day_view->slot_count || !day_view->slots[slot_index].valid) {
-            lv_obj_set_height(bar, 1);
-            lv_obj_set_style_bg_opa(bar, LV_OPA_TRANSP, 0);
-            lv_obj_clear_flag(bar, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(bar, LV_OBJ_FLAG_HIDDEN);
             continue;
         }
 
-        lv_coord_t height = (lv_coord_t)((day_view->slots[slot_index].price / max_price) * chart_height);
-        if (height < 6) {
-            height = 6;
+        histogram_layout_resolve_bar(shared_chart_layout, day_view->slots[slot_index].price, &bar_layout);
+        if (day_view->slot_count > 1) {
+            lv_coord_t max_x = row_width > bar_width ? row_width - bar_width : 0;
+            lv_coord_t bar_x = (lv_coord_t)(((int32_t)slot_index * max_x) / (day_view->slot_count - 1));
+            lv_obj_set_x(bar, bar_x);
+        } else {
+            lv_obj_set_x(bar, 0);
         }
-        if (height > chart_height) {
-            height = chart_height;
-        }
-
-        lv_obj_set_height(bar, height);
+        lv_obj_set_y(bar, (lv_coord_t)bar_layout.y);
+        lv_obj_set_height(bar, (lv_coord_t)bar_layout.height);
         lv_obj_set_style_bg_color(bar, ui_primary_get_band_fill_color(day_view->slots[slot_index].band), 0);
         lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
         lv_obj_clear_flag(bar, LV_OBJ_FLAG_HIDDEN);
@@ -171,6 +259,9 @@ static void update_detail_day_panel(ui_router_view_t *view, uint8_t index, const
 void ui_detail_update(const app_state_t *state, ui_router_view_t *view)
 {
     char clock_text[12] = {0};
+    histogram_layout_t shared_chart_layout = {0};
+    lv_coord_t chart_height = 0;
+    bool have_shared_chart_layout = false;
 
     lv_obj_set_style_bg_color(view->tiles[APP_SCREEN_DETAIL], lv_color_hex(0x0f172a), 0);
     ui_router_format_clock_label(clock_text, sizeof(clock_text), state->local_time_text);
@@ -195,9 +286,37 @@ void ui_detail_update(const app_state_t *state, ui_router_view_t *view)
         lv_label_set_text(view->detail_status_label, state->tariff_status_text);
     }
 
-    update_detail_day_panel(view, DETAIL_DAY_INDEX_TODAY, "Today", &state->tariff_today, state->tariff_tomorrow.available);
+    if (view->detail_day_bar_rows[DETAIL_DAY_INDEX_TODAY] != NULL) {
+        chart_height = lv_obj_get_content_height(view->detail_day_bar_rows[DETAIL_DAY_INDEX_TODAY]);
+        if (chart_height <= 0) {
+            chart_height = lv_obj_get_height(view->detail_day_bar_rows[DETAIL_DAY_INDEX_TODAY]);
+        }
+    }
+    if (chart_height <= 0) {
+        chart_height = get_detail_chart_bar_row_height();
+    }
+
+    have_shared_chart_layout = prepare_shared_detail_chart_layout(
+        &state->tariff_today,
+        state->tariff_tomorrow.available ? &state->tariff_tomorrow : NULL,
+        chart_height,
+        &shared_chart_layout);
+
+    update_detail_day_panel(
+        view,
+        DETAIL_DAY_INDEX_TODAY,
+        "Today",
+        &state->tariff_today,
+        state->tariff_tomorrow.available,
+        have_shared_chart_layout ? &shared_chart_layout : NULL);
     if (state->tariff_tomorrow.available) {
-        update_detail_day_panel(view, DETAIL_DAY_INDEX_TOMORROW, "Tomorrow", &state->tariff_tomorrow, true);
+        update_detail_day_panel(
+            view,
+            DETAIL_DAY_INDEX_TOMORROW,
+            "Tomorrow",
+            &state->tariff_tomorrow,
+            true,
+            have_shared_chart_layout ? &shared_chart_layout : NULL);
     } else if (view->detail_day_panels[DETAIL_DAY_INDEX_TOMORROW] != NULL) {
         lv_obj_add_flag(view->detail_day_panels[DETAIL_DAY_INDEX_TOMORROW], LV_OBJ_FLAG_HIDDEN);
     }
@@ -301,21 +420,28 @@ void ui_detail_create(lv_obj_t *tile, ui_router_view_t *view)
         lv_obj_set_style_border_side(view->detail_day_bar_rows[day_index], LV_BORDER_SIDE_BOTTOM, 0);
         lv_obj_set_style_border_color(view->detail_day_bar_rows[day_index], lv_color_hex(0x334155), 0);
         lv_obj_set_style_border_width(view->detail_day_bar_rows[day_index], 1, 0);
-        lv_obj_set_layout(view->detail_day_bar_rows[day_index], LV_LAYOUT_FLEX);
-        lv_obj_set_flex_flow(view->detail_day_bar_rows[day_index], LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(view->detail_day_bar_rows[day_index], LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
         lv_obj_clear_flag(view->detail_day_bar_rows[day_index], LV_OBJ_FLAG_SCROLLABLE);
 
         for (uint8_t slot_index = 0; slot_index < APP_TARIFF_DAY_SLOT_MAX; slot_index++) {
             view->detail_day_bars[day_index][slot_index] = lv_obj_create(view->detail_day_bar_rows[day_index]);
             lv_obj_set_width(view->detail_day_bars[day_index][slot_index], 4);
             lv_obj_set_height(view->detail_day_bars[day_index][slot_index], 6);
-            lv_obj_set_style_radius(view->detail_day_bars[day_index][slot_index], 2, 0);
+            lv_obj_set_style_radius(view->detail_day_bars[day_index][slot_index], 0, 0);
             lv_obj_set_style_bg_color(view->detail_day_bars[day_index][slot_index], lv_color_hex(0x374151), 0);
             lv_obj_set_style_bg_opa(view->detail_day_bars[day_index][slot_index], LV_OPA_COVER, 0);
             lv_obj_set_style_border_width(view->detail_day_bars[day_index][slot_index], 0, 0);
             lv_obj_clear_flag(view->detail_day_bars[day_index][slot_index], LV_OBJ_FLAG_SCROLLABLE);
         }
+
+        view->detail_day_zero_lines[day_index] = lv_obj_create(view->detail_day_bar_rows[day_index]);
+        lv_obj_set_width(view->detail_day_zero_lines[day_index], lv_pct(100));
+        lv_obj_set_height(view->detail_day_zero_lines[day_index], 1);
+        lv_obj_set_style_radius(view->detail_day_zero_lines[day_index], 0, 0);
+        lv_obj_set_style_bg_color(view->detail_day_zero_lines[day_index], lv_color_hex(0x475569), 0);
+        lv_obj_set_style_bg_opa(view->detail_day_zero_lines[day_index], LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(view->detail_day_zero_lines[day_index], 0, 0);
+        lv_obj_add_flag(view->detail_day_zero_lines[day_index], LV_OBJ_FLAG_FLOATING | LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_background(view->detail_day_zero_lines[day_index]);
 
         view->detail_day_time_markers[day_index] = lv_obj_create(view->detail_day_bar_rows[day_index]);
         lv_obj_set_width(view->detail_day_time_markers[day_index], 2);

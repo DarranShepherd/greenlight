@@ -54,6 +54,7 @@ typedef struct {
     lv_obj_t *detail_day_titles[2];
     lv_obj_t *detail_day_bar_rows[2];
     lv_obj_t *detail_day_bars[2][APP_TARIFF_DAY_SLOT_MAX];
+    lv_obj_t *detail_day_zero_lines[2];
     lv_obj_t *detail_day_time_markers[2];
     lv_obj_t *detail_day_min_labels[2];
     lv_obj_t *detail_day_avg_labels[2];

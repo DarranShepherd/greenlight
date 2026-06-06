@@ -51,8 +51,15 @@ cc -std=c11 -Wall -Wextra -Werror \
     "$ROOT_DIR/main/wifi_reconnect_policy.c" \
     -o "$BUILD_DIR/test_wifi_reconnect_policy"
 
+cc -std=c11 -Wall -Wextra -Werror \
+    -I"$ROOT_DIR/main" \
+    "$ROOT_DIR/tools/test_night_mode_policy.c" \
+    "$ROOT_DIR/main/night_mode_policy.c" \
+    -o "$BUILD_DIR/test_night_mode_policy"
+
 "$BUILD_DIR/test_octopus_client"
 "$BUILD_DIR/test_ota_manager_internal"
 "$BUILD_DIR/test_sync_controller_refresh"
 "$BUILD_DIR/test_histogram_layout"
 "$BUILD_DIR/test_wifi_reconnect_policy"
+"$BUILD_DIR/test_night_mode_policy"

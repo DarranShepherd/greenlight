@@ -10,6 +10,7 @@ idf_component_register(
         "lv_font_montserrat_20_numeric.c"
         "lv_font_montserrat_28_numeric.c"
         "main.c"
+        "night_mode_policy.c"
         "octopus_client.c"
         "octopus_client_internal.c"
         "ota_manager.c"

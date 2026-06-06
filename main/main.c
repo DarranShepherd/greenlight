@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -13,6 +14,7 @@
 #include "board_profile.h"
 #include "docs_screenshot.h"
 #include "lcd.h"
+#include "night_mode_policy.h"
 #include "ota_manager.h"
 #include "sync_controller.h"
 #include "time_manager.h"
@@ -27,8 +29,10 @@ static app_settings_t s_settings;
 static app_state_t s_app_state;
 static app_settings_t s_state_settings_snapshot;
 static app_state_t s_state_snapshot;
+static night_mode_policy_t s_night_mode_policy;
 static bool s_onboarding_session_active;
 static uint32_t s_onboarding_splash_deadline_ms;
+static int s_applied_backlight_percent = -1;
 
 static bool should_hold_onboarding_splash(void)
 {
@@ -160,6 +164,57 @@ static void update_startup_stage(app_state_t *state, bool wifi_connected)
     app_state_set_startup_stage(state, APP_STARTUP_STAGE_COMPLETE, "Startup complete");
 }
 
+static bool try_get_local_time(struct tm *local_time)
+{
+    time_t now = 0;
+
+    if (local_time == NULL || !app_state_get_time_valid(&s_app_state)) {
+        return false;
+    }
+
+    time(&now);
+    localtime_r(&now, local_time);
+    return true;
+}
+
+static void update_display_brightness(app_state_t *state)
+{
+    struct tm local_time = {0};
+    bool has_local_time = try_get_local_time(&local_time);
+    bool touch_pressed = false;
+    int target_brightness = APP_SETTINGS_DEFAULT_BRIGHTNESS_PERCENT;
+
+    if (state == NULL) {
+        return;
+    }
+
+    app_state_get_settings(state, &s_state_settings_snapshot);
+
+#if !CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
+    touch_pressed = touch_consume_activity();
+#endif
+
+    night_mode_policy_update(
+        &s_night_mode_policy,
+        has_local_time,
+        has_local_time ? &local_time : NULL,
+        touch_pressed,
+        esp_log_timestamp()
+    );
+
+    target_brightness = (int)night_mode_policy_effective_brightness(
+        &s_night_mode_policy,
+        s_state_settings_snapshot.brightness_percent
+    );
+
+    if (target_brightness == s_applied_backlight_percent) {
+        return;
+    }
+
+    ESP_ERROR_CHECK(lcd_set_brightness(target_brightness));
+    s_applied_backlight_percent = target_brightness;
+}
+
 void app_main(void)
 {
     const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
@@ -221,8 +276,7 @@ void app_main(void)
     }
 #endif
 
-    app_state_get_settings(&s_app_state, &s_state_settings_snapshot);
-    ESP_ERROR_CHECK(lcd_set_brightness(s_state_settings_snapshot.brightness_percent));
+    update_display_brightness(&s_app_state);
 
 #if CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
     ESP_LOGI(TAG, "Docs mode waiting briefly for LVGL task to settle");
@@ -273,6 +327,7 @@ void app_main(void)
 
         was_wifi_connected = wifi_connected;
         time_manager_update_clock(&s_app_state);
+        update_display_brightness(&s_app_state);
         update_startup_stage(&s_app_state, wifi_connected);
         app_state_get_snapshot(&s_app_state, &s_state_snapshot);
 

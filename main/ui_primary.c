@@ -320,9 +320,7 @@ void ui_primary_update(const app_state_t *state, ui_router_view_t *view)
 
     if (view->primary_hero_card != NULL) {
         lv_obj_set_style_bg_color(view->primary_hero_card, palette.hero_bg, 0);
-        lv_obj_set_style_shadow_color(view->primary_hero_card, lv_color_black(), 0);
-        lv_obj_set_style_shadow_width(view->primary_hero_card, 16, 0);
-        lv_obj_set_style_shadow_opa(view->primary_hero_card, LV_OPA_20, 0);
+        lv_obj_set_style_shadow_width(view->primary_hero_card, 0, 0);
     }
 
     if (view->primary_band_label != NULL) {

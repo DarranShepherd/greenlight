@@ -59,6 +59,14 @@ typedef struct {
 tariff_band_t tariff_model_classify_price(float price_including_vat);
 const char *tariff_model_get_band_name(tariff_band_t band);
 int tariff_model_get_local_day_key(time_t local_time);
+bool tariff_model_build_preview_blocks(
+    const tariff_slot_t *slots,
+    size_t slot_count,
+    bool simplified,
+    tariff_block_t *blocks,
+    size_t max_blocks,
+    size_t *block_count
+);
 bool tariff_model_build(
     const tariff_slot_t *source_slots,
     size_t source_slot_count,

@@ -12,6 +12,11 @@
 #define APP_SETTINGS_DEFAULT_BRIGHTNESS_PERCENT 80
 #define APP_TOUCH_CALIBRATION_SCALE 1000
 
+typedef enum {
+    APP_FUTURE_PERIODS_MODE_SIMPLIFIED = 0,
+    APP_FUTURE_PERIODS_MODE_EXACT,
+} app_future_periods_mode_t;
+
 typedef struct {
     bool valid;
     int32_t xx;
@@ -33,6 +38,7 @@ typedef struct {
     char wifi_psk[APP_SETTINGS_WIFI_PSK_MAX_LEN + 1];
     char region_code[APP_SETTINGS_REGION_CODE_MAX_LEN + 1];
     uint8_t brightness_percent;
+    app_future_periods_mode_t future_periods_mode;
     app_touch_calibration_t touch_calibration;
 } app_settings_t;
 

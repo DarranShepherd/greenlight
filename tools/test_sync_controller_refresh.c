@@ -132,6 +132,17 @@ static void reset_harness(app_state_t *state, app_settings_t *settings, const ch
     sync_controller_test_reset(state, settings, region_code);
 }
 
+static void load_price_sequence(time_t first_slot_start, const float *prices, size_t slot_count)
+{
+    assert(prices != NULL);
+    assert(slot_count <= TARIFF_MODEL_MAX_SLOTS);
+
+    s_stub_slot_count = slot_count;
+    for (size_t index = 0; index < slot_count; index++) {
+        s_stub_slots[index] = make_slot(first_slot_start + ((time_t)index * 30 * 60), prices[index]);
+    }
+}
+
 static void load_linear_slots(time_t first_slot_start, size_t slot_count, float first_price, float step)
 {
     assert(slot_count <= TARIFF_MODEL_MAX_SLOTS);
@@ -345,6 +356,89 @@ static void test_tariff_model_handles_london_spring_forward_day(void)
     assert(runtime_state.block_count == 1);
 }
 
+static void test_simplified_future_periods_collapse_isolated_slot(void)
+{
+    app_settings_t settings = {0};
+    app_state_t state = {0};
+    const float prices[] = {14.7f, 15.3f, 14.6f, 21.0f, 31.0f};
+    time_t now_local = 0;
+    time_t first_slot = 0;
+
+    setenv("TZ", "UTC", 1);
+    tzset();
+
+    first_slot = make_local_timestamp(2024, 5, 14, 2, 0, 0);
+    now_local = make_local_timestamp(2024, 5, 14, 1, 50, 0);
+
+    reset_harness(&state, &settings, "B");
+    load_price_sequence(first_slot, prices, sizeof(prices) / sizeof(prices[0]));
+
+    assert(sync_controller_test_refresh_tariffs(now_local) == ESP_OK);
+    assert(state.tariff_preview_count == 3);
+    assert(state.tariff_previews[0].valid);
+    assert(state.tariff_previews[0].band == TARIFF_BAND_CHEAP);
+    assert(state.tariff_previews[0].start_local == first_slot);
+    assert(state.tariff_previews[0].end_local == first_slot + (3 * 30 * 60));
+    assert(strstr(state.tariff_next_text, "02:00-03:30 Cheap") != NULL);
+}
+
+static void test_exact_future_periods_preserve_short_threshold_crossings(void)
+{
+    app_settings_t settings = {0};
+    app_state_t state = {0};
+    const float prices[] = {14.7f, 15.3f, 14.6f, 21.0f, 31.0f};
+    time_t now_local = 0;
+    time_t first_slot = 0;
+
+    setenv("TZ", "UTC", 1);
+    tzset();
+
+    first_slot = make_local_timestamp(2024, 5, 14, 2, 0, 0);
+    now_local = make_local_timestamp(2024, 5, 14, 1, 50, 0);
+
+    reset_harness(&state, &settings, "B");
+    settings.future_periods_mode = APP_FUTURE_PERIODS_MODE_EXACT;
+    app_state_set_settings(&state, &settings);
+    load_price_sequence(first_slot, prices, sizeof(prices) / sizeof(prices[0]));
+
+    assert(sync_controller_test_refresh_tariffs(now_local) == ESP_OK);
+    assert(state.tariff_preview_count == 3);
+    assert(state.tariff_previews[0].band == TARIFF_BAND_CHEAP);
+    assert(state.tariff_previews[0].start_local == first_slot);
+    assert(state.tariff_previews[0].end_local == first_slot + (30 * 60));
+    assert(state.tariff_previews[1].band == TARIFF_BAND_NORMAL);
+    assert(state.tariff_previews[1].start_local == first_slot + (30 * 60));
+    assert(state.tariff_previews[1].end_local == first_slot + (60 * 60));
+    assert(strstr(state.tariff_next_text, "02:00-02:30 Cheap | 02:30-03:00 Normal | 03:00-03:30 Cheap") != NULL);
+}
+
+static void test_simplified_future_periods_do_not_inherit_current_band(void)
+{
+    app_settings_t settings = {0};
+    app_state_t state = {0};
+    const float prices[] = {20.0f, 14.2f, 11.0f, 9.0f, -2.6f, -3.0f};
+    time_t now_local = 0;
+    time_t first_slot = 0;
+
+    setenv("TZ", "UTC", 1);
+    tzset();
+
+    first_slot = make_local_timestamp(2024, 5, 14, 0, 0, 0);
+    now_local = make_local_timestamp(2024, 5, 14, 0, 10, 0);
+
+    reset_harness(&state, &settings, "B");
+    load_price_sequence(first_slot, prices, sizeof(prices) / sizeof(prices[0]));
+
+    assert(sync_controller_test_refresh_tariffs(now_local) == ESP_OK);
+    assert(state.tariff_current_block_valid);
+    assert(state.tariff_current_band == TARIFF_BAND_NORMAL);
+    assert(state.tariff_preview_count >= 2);
+    assert(state.tariff_previews[0].band == TARIFF_BAND_CHEAP);
+    assert(state.tariff_previews[0].start_local == first_slot + (30 * 60));
+    assert(state.tariff_previews[0].end_local == first_slot + (2 * 60 * 60));
+    assert(strstr(state.tariff_next_text, "00:30-02:00 Cheap") != NULL);
+}
+
 int main(void)
 {
     test_region_switch_failure_preserves_last_good_dataset();
@@ -353,6 +447,9 @@ int main(void)
     test_partial_tomorrow_publication_populates_day_views_without_full_day_assumption();
     test_runtime_snapshot_rolls_forward_when_time_crosses_block_boundary();
     test_tariff_model_handles_london_spring_forward_day();
+    test_simplified_future_periods_collapse_isolated_slot();
+    test_exact_future_periods_preserve_short_threshold_crossings();
+    test_simplified_future_periods_do_not_inherit_current_band();
 
     puts("sync_controller refresh preservation harness passed");
     return 0;

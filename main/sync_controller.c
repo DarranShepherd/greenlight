@@ -27,6 +27,7 @@ static app_state_t *s_state;
 static runtime_tariff_state_t s_runtime_state;
 static runtime_tariff_state_t s_next_runtime_state;
 static tariff_slot_t s_fetched_slots[TARIFF_MODEL_MAX_SLOTS];
+static tariff_block_t s_preview_blocks[TARIFF_MODEL_MAX_BLOCKS];
 static size_t s_fetched_slot_count;
 static bool s_has_successful_load;
 static time_t s_last_attempt_time;
@@ -245,6 +246,7 @@ static void refresh_runtime_state_for_time(time_t now_local)
 
 static void publish_runtime_snapshot(time_t now_local)
 {
+    app_settings_t settings = {0};
     char requested_region_code[APP_SETTINGS_REGION_CODE_MAX_LEN + 1] = {0};
     char status_text[APP_TARIFF_STATUS_TEXT_MAX_LEN] = {0};
     char current_text[APP_TARIFF_SNAPSHOT_TEXT_MAX_LEN] = {0};
@@ -256,14 +258,18 @@ static void publish_runtime_snapshot(time_t now_local)
     app_tariff_day_view_t tomorrow_view = {0};
     const tariff_slot_t *current_slot = get_current_slot();
     const tariff_block_t *current_block = get_current_block();
+    const tariff_block_t *preview_blocks = NULL;
     struct tm local_tm = {0};
     size_t next_offset = 0;
+    size_t preview_block_count = 0;
+    size_t preview_block_start_index = 0;
     time_t next_block_start_local = 0;
     uint8_t preview_count = 0;
 
     refresh_runtime_state_for_time(now_local);
     current_slot = get_current_slot();
     current_block = get_current_block();
+    app_state_get_settings(s_state, &settings);
 
     localtime_r(&now_local, &local_tm);
     get_requested_region_code(requested_region_code, sizeof(requested_region_code));
@@ -309,9 +315,35 @@ static void publish_runtime_snapshot(time_t now_local)
         strlcpy(current_text, "No active tariff slot matches the current local time", sizeof(current_text));
     }
 
-    if (s_runtime_state.current_block_index >= 0) {
-        for (int index = s_runtime_state.current_block_index + 1; index < (int)s_runtime_state.block_count && index <= s_runtime_state.current_block_index + 3; index++) {
-            const tariff_block_t *block = &s_runtime_state.blocks[index];
+    if (current_block != NULL) {
+        while (preview_block_start_index < s_runtime_state.slot_count &&
+               s_runtime_state.slots[preview_block_start_index].start_local < current_block->end_local) {
+            preview_block_start_index++;
+        }
+    } else {
+        while (preview_block_start_index < s_runtime_state.slot_count &&
+               s_runtime_state.slots[preview_block_start_index].start_local <= now_local) {
+            preview_block_start_index++;
+        }
+    }
+
+    if (preview_block_start_index < s_runtime_state.slot_count) {
+        bool simplified = settings.future_periods_mode == APP_FUTURE_PERIODS_MODE_SIMPLIFIED;
+
+        if (tariff_model_build_preview_blocks(
+                &s_runtime_state.slots[preview_block_start_index],
+                s_runtime_state.slot_count - preview_block_start_index,
+                simplified,
+                s_preview_blocks,
+                TARIFF_MODEL_MAX_BLOCKS,
+                &preview_block_count)) {
+            preview_blocks = s_preview_blocks;
+        }
+    }
+
+    if (preview_blocks != NULL) {
+        for (size_t index = 0; index < preview_block_count && preview_count < APP_TARIFF_PREVIEW_MAX; index++) {
+            const tariff_block_t *block = &preview_blocks[index];
             char start_time[8] = {0};
             char end_time[8] = {0};
             int written = 0;
@@ -329,6 +361,41 @@ static void publish_runtime_snapshot(time_t now_local)
                     .band = block->band,
                 };
             }
+
+            format_time_compact(start_time, sizeof(start_time), block->start_local);
+            format_time_compact(end_time, sizeof(end_time), block->end_local);
+            written = snprintf(
+                &next_text[next_offset],
+                sizeof(next_text) - next_offset,
+                "%s%s-%s %s",
+                next_offset == 0 ? "Next: " : " | ",
+                start_time,
+                end_time,
+                tariff_model_get_band_name(block->band)
+            );
+            if (written < 0 || (size_t)written >= sizeof(next_text) - next_offset) {
+                break;
+            }
+            next_offset += (size_t)written;
+        }
+    } else if (s_runtime_state.current_block_index >= 0) {
+        for (int index = s_runtime_state.current_block_index + 1; index < (int)s_runtime_state.block_count && preview_count < APP_TARIFF_PREVIEW_MAX; index++) {
+            const tariff_block_t *block = &s_runtime_state.blocks[index];
+            char start_time[8] = {0};
+            char end_time[8] = {0};
+            int written = 0;
+
+            if (preview_count == 0) {
+                next_block_start_local = block->start_local;
+            }
+
+            previews[preview_count++] = (app_tariff_preview_t){
+                .valid = true,
+                .start_local = block->start_local,
+                .end_local = block->end_local,
+                .representative_price = block->representative_price,
+                .band = block->band,
+            };
 
             format_time_compact(start_time, sizeof(start_time), block->start_local);
             format_time_compact(end_time, sizeof(end_time), block->end_local);

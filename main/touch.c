@@ -17,6 +17,7 @@ static greenlight_touch_profile_t s_touch_profile;
 static int32_t s_last_raw_x;
 static int32_t s_last_raw_y;
 static bool s_has_last_raw_point;
+static volatile bool s_touch_activity_pending;
 
 static void touch_apply_orientation(int32_t *x, int32_t *y, int32_t max_x, int32_t max_y)
 {
@@ -76,6 +77,7 @@ static void touch_process_coordinates(
             direct_coordinates ? (int32_t)(tp->config.x_max - 1) : TOUCH_RAW_COORDINATE_MAX,
             direct_coordinates ? (int32_t)(tp->config.y_max - 1) : TOUCH_RAW_COORDINATE_MAX
         );
+        s_touch_activity_pending = true;
         s_last_raw_x = raw_x;
         s_last_raw_y = raw_y;
         s_has_last_raw_point = true;
@@ -129,6 +131,14 @@ bool touch_get_latest_raw_point(int32_t *x, int32_t *y)
     return true;
 }
 
+bool touch_consume_activity(void)
+{
+    bool pending = s_touch_activity_pending;
+
+    s_touch_activity_pending = false;
+    return pending;
+}
+
 void touch_set_calibration(const app_touch_calibration_t *calibration)
 {
     if (calibration == NULL) {
@@ -149,6 +159,7 @@ esp_err_t touch_init(esp_lcd_touch_handle_t *touch_handle)
 
     s_touch_profile = *touch;
     s_has_last_raw_point = false;
+    s_touch_activity_pending = false;
 
     if (touch_handle != NULL) {
         *touch_handle = NULL;

@@ -275,6 +275,17 @@ static void apply_state_locked(const app_state_t *state)
         );
     }
 
+    if (s_view.tileview != NULL) {
+        if (state->startup_stage == APP_STARTUP_STAGE_COMPLETE) {
+            lv_obj_add_flag(s_view.tileview, LV_OBJ_FLAG_SCROLLABLE);
+        } else {
+            lv_obj_clear_flag(s_view.tileview, LV_OBJ_FLAG_SCROLLABLE);
+            if (lv_tileview_get_tile_active(s_view.tileview) != s_view.tiles[APP_SCREEN_SETTINGS]) {
+                lv_tileview_set_tile_by_index(s_view.tileview, APP_SCREEN_SETTINGS, 0, LV_ANIM_OFF);
+            }
+        }
+    }
+
     sync_tile_locked(state);
     ui_primary_update(state, &s_view);
     ui_detail_update(state, &s_view);

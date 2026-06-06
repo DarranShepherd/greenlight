@@ -20,11 +20,20 @@
 #include "ui_router.h"
 #include "wifi_manager.h"
 
+#define ONBOARDING_SPLASH_MIN_MS 2000
+
 static const char *TAG = "greenlight";
 static app_settings_t s_settings;
 static app_state_t s_app_state;
 static app_settings_t s_state_settings_snapshot;
 static app_state_t s_state_snapshot;
+static bool s_onboarding_session_active;
+static uint32_t s_onboarding_splash_deadline_ms;
+
+static bool should_hold_onboarding_splash(void)
+{
+    return s_onboarding_session_active && esp_log_timestamp() < s_onboarding_splash_deadline_ms;
+}
 
 static lv_display_rotation_t get_display_rotation(const greenlight_display_profile_t *display)
 {
@@ -83,6 +92,8 @@ static esp_err_t init_touch_with_retries(esp_lcd_touch_handle_t *touch_handle)
 
 static void update_startup_stage(app_state_t *state, bool wifi_connected)
 {
+    app_startup_stage_t progress_stage = APP_STARTUP_STAGE_BOOTING;
+
     if (state == NULL) {
         return;
     }
@@ -93,35 +104,59 @@ static void update_startup_stage(app_state_t *state, bool wifi_connected)
         return;
     }
 
+    if (should_hold_onboarding_splash()) {
+        app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, "Starting Greenlight");
+        return;
+    }
+
+    if (!app_settings_region_is_configured(&s_state_snapshot.settings)) {
+        s_onboarding_session_active = true;
+        app_state_set_startup_stage(state, APP_STARTUP_STAGE_ONBOARDING, "Choose your Octopus region to begin setup.");
+        return;
+    }
+
     if (!s_state_snapshot.wifi_has_saved_credentials) {
-        app_state_set_startup_stage(state, APP_STARTUP_STAGE_ONBOARDING, "Wi-Fi not configured. Open settings to begin onboarding.");
+        s_onboarding_session_active = true;
+        app_state_set_startup_stage(state, APP_STARTUP_STAGE_ONBOARDING, "Region saved. Connect to Wi-Fi to continue setup.");
         return;
     }
 
     if (s_state_snapshot.wifi_status == APP_WIFI_STATUS_FAILED) {
+        s_onboarding_session_active = true;
         app_state_set_startup_stage(state, APP_STARTUP_STAGE_ONBOARDING, s_state_snapshot.wifi_status_text);
         return;
     }
 
+    if (s_onboarding_session_active) {
+        progress_stage = APP_STARTUP_STAGE_ONBOARDING;
+    }
+
     if (!wifi_connected) {
         if (s_state_snapshot.wifi_status == APP_WIFI_STATUS_CONNECTING) {
-            app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, s_state_snapshot.wifi_status_text);
+            app_state_set_startup_stage(state, progress_stage, s_state_snapshot.wifi_status_text);
         } else {
-            app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, "Connecting to Wi-Fi");
+            app_state_set_startup_stage(state, progress_stage, "Connecting to Wi-Fi");
         }
         return;
     }
 
     if (!s_state_snapshot.time_valid) {
-        app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, s_state_snapshot.time_status_text);
+        app_state_set_startup_stage(state, progress_stage, s_state_snapshot.time_status_text);
         return;
     }
 
-    if (!s_state_snapshot.tariff_has_data && s_state_snapshot.tariff_status != APP_TARIFF_STATUS_OFFLINE) {
-        app_state_set_startup_stage(state, APP_STARTUP_STAGE_BOOTING, s_state_snapshot.tariff_status_text);
+    if (s_state_snapshot.tariff_status == APP_TARIFF_STATUS_OFFLINE) {
+        s_onboarding_session_active = true;
+        app_state_set_startup_stage(state, APP_STARTUP_STAGE_ONBOARDING, s_state_snapshot.tariff_status_text);
         return;
     }
 
+    if (!s_state_snapshot.tariff_has_data || !s_state_snapshot.tariff_current_block_valid) {
+        app_state_set_startup_stage(state, progress_stage, s_state_snapshot.tariff_status_text);
+        return;
+    }
+
+    s_onboarding_session_active = false;
     app_state_set_startup_stage(state, APP_STARTUP_STAGE_COMPLETE, "Startup complete");
 }
 
@@ -150,9 +185,11 @@ void app_main(void)
     app_state_init(&s_app_state, &s_settings);
     app_state_get_snapshot(&s_app_state, &s_state_snapshot);
 #if !CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
-    if (!s_state_snapshot.wifi_has_saved_credentials) {
+    s_onboarding_session_active = !app_settings_region_is_configured(&s_state_snapshot.settings) || !s_state_snapshot.wifi_has_saved_credentials;
+    s_onboarding_splash_deadline_ms = esp_log_timestamp() + ONBOARDING_SPLASH_MIN_MS;
+    if (s_onboarding_session_active) {
         app_state_set_active_screen(&s_app_state, APP_SCREEN_SETTINGS);
-        app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_ONBOARDING, "Wi-Fi not configured. Open settings to begin onboarding.");
+        app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_BOOTING, "Starting Greenlight");
     }
 #endif
 
@@ -217,9 +254,11 @@ void app_main(void)
         ESP_LOGI(TAG, "Attempting Wi-Fi reconnect using saved credentials");
         app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_BOOTING, "Connecting to saved Wi-Fi");
         ESP_ERROR_CHECK(wifi_manager_request_connect(s_state_settings_snapshot.wifi_ssid, s_state_settings_snapshot.wifi_psk));
-    } else {
-        ESP_LOGI(TAG, "No saved Wi-Fi credentials, showing onboarding");
+    } else if (app_settings_region_is_configured(&s_state_settings_snapshot)) {
+        ESP_LOGI(TAG, "Region configured but no saved Wi-Fi credentials, showing guided Wi-Fi setup");
         ESP_ERROR_CHECK(wifi_manager_request_scan());
+    } else {
+        ESP_LOGI(TAG, "No region configured, waiting in guided onboarding");
     }
 
     while (true) {
@@ -236,13 +275,11 @@ void app_main(void)
         update_startup_stage(&s_app_state, wifi_connected);
         app_state_get_snapshot(&s_app_state, &s_state_snapshot);
 
-        if (!tariff_entry_released) {
-            if (s_state_snapshot.startup_stage == APP_STARTUP_STAGE_ONBOARDING) {
-                app_state_set_active_screen(&s_app_state, APP_SCREEN_SETTINGS);
-                tariff_entry_released = true;
-            } else if (s_state_snapshot.tariff_has_data || s_state_snapshot.tariff_status == APP_TARIFF_STATUS_OFFLINE) {
+        if (s_state_snapshot.startup_stage == APP_STARTUP_STAGE_ONBOARDING) {
+            app_state_set_active_screen(&s_app_state, APP_SCREEN_SETTINGS);
+        } else if (!tariff_entry_released && s_state_snapshot.startup_stage == APP_STARTUP_STAGE_COMPLETE) {
+            if (s_state_snapshot.tariff_has_data && s_state_snapshot.tariff_current_block_valid) {
                 app_state_set_active_screen(&s_app_state, APP_SCREEN_PRIMARY);
-                app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_COMPLETE, "Startup complete");
                 tariff_entry_released = true;
             }
         }

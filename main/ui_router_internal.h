@@ -18,6 +18,10 @@ typedef struct {
     lv_obj_t *startup_title_label;
     lv_obj_t *startup_status_label;
     lv_obj_t *settings_content;
+    lv_obj_t *onboarding_card;
+    lv_obj_t *onboarding_step_label;
+    lv_obj_t *onboarding_status_label;
+    lv_obj_t *onboarding_retry_button;
     lv_obj_t *primary_top_bar;
     lv_obj_t *primary_clock_label;
     lv_obj_t *primary_title_label;
@@ -54,17 +58,25 @@ typedef struct {
     lv_obj_t *detail_day_min_labels[2];
     lv_obj_t *detail_day_avg_labels[2];
     lv_obj_t *detail_day_max_labels[2];
+    lv_obj_t *brightness_card;
     lv_obj_t *brightness_label;
     lv_obj_t *brightness_bar;
+    lv_obj_t *region_card;
     lv_obj_t *region_label;
+    lv_obj_t *region_dropdown;
+    lv_obj_t *region_continue_button;
     lv_obj_t *settings_top_bar;
     lv_obj_t *settings_clock_label;
     lv_obj_t *settings_title_label;
     lv_obj_t *settings_wifi_label;
     lv_obj_t *settings_wifi_strike_label;
+    lv_obj_t *wifi_card;
     lv_obj_t *wifi_status_label;
     lv_obj_t *time_status_label;
     lv_obj_t *local_time_label;
+    lv_obj_t *touch_card;
+    lv_obj_t *time_card;
+    lv_obj_t *firmware_card;
     lv_obj_t *firmware_version_label;
     lv_obj_t *firmware_available_label;
     lv_obj_t *firmware_status_label;
@@ -91,6 +103,7 @@ typedef struct {
     app_state_t *state;
     app_state_t state_snapshot;
     app_screen_t last_active_screen;
+    bool onboarding_wifi_autoscan_requested;
 } ui_router_view_t;
 
 uint8_t ui_router_clamp_brightness_value(int32_t brightness_percent);

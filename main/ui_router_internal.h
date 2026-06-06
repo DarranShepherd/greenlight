@@ -68,6 +68,9 @@ typedef struct {
     lv_obj_t *brightness_card;
     lv_obj_t *brightness_label;
     lv_obj_t *brightness_bar;
+    lv_obj_t *future_periods_card;
+    lv_obj_t *future_periods_value_label;
+    lv_obj_t *future_periods_button;
     lv_obj_t *region_card;
     lv_obj_t *region_label;
     lv_obj_t *region_dropdown;

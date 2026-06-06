@@ -16,6 +16,7 @@ static const char *KEY_WIFI_SSID = "wifi_ssid";
 static const char *KEY_WIFI_PSK = "wifi_psk";
 static const char *KEY_REGION_CODE = "region";
 static const char *KEY_BRIGHTNESS = "brightness";
+static const char *KEY_FUTURE_PERIODS_MODE = "future_mode";
 static const char *KEY_TOUCH_CAL_BOARD = "touch_board";
 static const char *KEY_TOUCH_CAL_VERSION = "touch_ver";
 static const char *KEY_TOUCH_CAL_VALID = "touch_cal_ok";
@@ -72,6 +73,11 @@ static uint8_t clamp_brightness(uint8_t brightness_percent)
     }
 
     return brightness_percent;
+}
+
+static app_future_periods_mode_t clamp_future_periods_mode(uint8_t mode)
+{
+    return mode == APP_FUTURE_PERIODS_MODE_EXACT ? APP_FUTURE_PERIODS_MODE_EXACT : APP_FUTURE_PERIODS_MODE_SIMPLIFIED;
 }
 
 static void normalize_region_code(char *region_code, size_t region_code_size)
@@ -206,6 +212,7 @@ void app_settings_set_defaults(app_settings_t *settings)
 {
     memset(settings, 0, sizeof(*settings));
     settings->brightness_percent = APP_SETTINGS_DEFAULT_BRIGHTNESS_PERCENT;
+    settings->future_periods_mode = APP_FUTURE_PERIODS_MODE_SIMPLIFIED;
     settings->touch_calibration = *get_touch_calibration_seed();
 }
 
@@ -225,6 +232,7 @@ esp_err_t app_settings_load(app_settings_t *settings)
     nvs_handle_t handle = 0;
     esp_err_t ret = ESP_OK;
     uint8_t brightness_percent = APP_SETTINGS_DEFAULT_BRIGHTNESS_PERCENT;
+    uint8_t future_periods_mode = APP_FUTURE_PERIODS_MODE_SIMPLIFIED;
 
     app_settings_set_defaults(settings);
 
@@ -243,6 +251,12 @@ esp_err_t app_settings_load(app_settings_t *settings)
     if (err != ESP_ERR_NVS_NOT_FOUND) {
         ESP_GOTO_ON_ERROR(err, cleanup, TAG, "load brightness");
         settings->brightness_percent = clamp_brightness(brightness_percent);
+    }
+
+    err = nvs_get_u8(handle, KEY_FUTURE_PERIODS_MODE, &future_periods_mode);
+    if (err != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_GOTO_ON_ERROR(err, cleanup, TAG, "load future periods mode");
+        settings->future_periods_mode = clamp_future_periods_mode(future_periods_mode);
     }
 
     ESP_GOTO_ON_ERROR(load_touch_calibration(handle, &settings->touch_calibration), cleanup, TAG, "load touch calibration");
@@ -270,6 +284,12 @@ esp_err_t app_settings_save(const app_settings_t *settings)
         cleanup,
         TAG,
         "save brightness"
+    );
+    ESP_GOTO_ON_ERROR(
+        nvs_set_u8(handle, KEY_FUTURE_PERIODS_MODE, (uint8_t)clamp_future_periods_mode(normalized_settings.future_periods_mode)),
+        cleanup,
+        TAG,
+        "save future periods mode"
     );
     ESP_GOTO_ON_ERROR(store_touch_calibration(handle, &normalized_settings.touch_calibration), cleanup, TAG, "save touch calibration");
     ESP_GOTO_ON_ERROR(nvs_commit(handle), cleanup, TAG, "commit settings");

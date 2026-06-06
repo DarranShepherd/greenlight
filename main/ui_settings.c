@@ -105,6 +105,11 @@ static const char *get_selected_region_code(const app_settings_t *settings)
     return "";
 }
 
+static const char *get_future_periods_mode_name(app_future_periods_mode_t mode)
+{
+    return mode == APP_FUTURE_PERIODS_MODE_EXACT ? "Exact" : "Simplified";
+}
+
 static const char *get_board_display_name(void)
 {
     const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
@@ -617,6 +622,25 @@ static void change_brightness(ui_router_view_t *view, int32_t delta)
     ui_router_apply_brightness(view, next_brightness);
 }
 
+static void toggle_future_periods_mode(ui_router_view_t *view)
+{
+    app_settings_t settings = {0};
+
+    if (view == NULL || view->state == NULL || !ui_router_copy_settings(view, &settings)) {
+        return;
+    }
+
+    settings.future_periods_mode = settings.future_periods_mode == APP_FUTURE_PERIODS_MODE_EXACT
+                                       ? APP_FUTURE_PERIODS_MODE_SIMPLIFIED
+                                       : APP_FUTURE_PERIODS_MODE_EXACT;
+
+    if (app_settings_save(&settings) != ESP_OK) {
+        return;
+    }
+
+    app_state_set_settings(view->state, &settings);
+}
+
 static void brightness_down_event_cb(lv_event_t *event)
 {
     ui_router_view_t *view = (ui_router_view_t *)lv_event_get_user_data(event);
@@ -637,6 +661,17 @@ static void brightness_up_event_cb(lv_event_t *event)
     }
 
     change_brightness(view, 10);
+}
+
+static void future_periods_mode_event_cb(lv_event_t *event)
+{
+    ui_router_view_t *view = (ui_router_view_t *)lv_event_get_user_data(event);
+
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED) {
+        return;
+    }
+
+    toggle_future_periods_mode(view);
 }
 
 static void region_next_event_cb(lv_event_t *event)
@@ -900,6 +935,22 @@ void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
         lv_bar_set_value(view->brightness_bar, state->settings.brightness_percent, LV_ANIM_OFF);
     }
 
+    if (view->future_periods_value_label != NULL) {
+        lv_label_set_text_fmt(
+            view->future_periods_value_label,
+            "Next periods use %s grouping",
+            get_future_periods_mode_name(state->settings.future_periods_mode)
+        );
+    }
+
+    if (view->future_periods_button != NULL) {
+        lv_obj_t *button_label = lv_obj_get_child(view->future_periods_button, 0);
+
+        if (button_label != NULL) {
+            lv_label_set_text_fmt(button_label, "Mode: %s", get_future_periods_mode_name(state->settings.future_periods_mode));
+        }
+    }
+
     ui_router_format_clock_label(clock_text, sizeof(clock_text), state->local_time_text);
 
     if (view->settings_clock_label != NULL) {
@@ -968,6 +1019,14 @@ void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
             lv_obj_add_flag(view->brightness_card, LV_OBJ_FLAG_HIDDEN);
         } else {
             lv_obj_clear_flag(view->brightness_card, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    if (view->future_periods_card != NULL) {
+        if (onboarding_active) {
+            lv_obj_add_flag(view->future_periods_card, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_clear_flag(view->future_periods_card, LV_OBJ_FLAG_HIDDEN);
         }
     }
 
@@ -1194,6 +1253,27 @@ void ui_settings_create(lv_obj_t *screen, lv_obj_t *tile, ui_router_view_t *view
     lv_label_set_text(plus_label, "+");
     lv_obj_set_style_text_color(plus_label, lv_color_white(), 0);
     lv_obj_center(plus_label);
+
+    view->future_periods_card = ui_router_create_section_card(view->settings_content, lv_color_hex(0x111827));
+    lv_obj_set_style_radius(view->future_periods_card, 16, 0);
+    lv_obj_set_style_border_width(view->future_periods_card, 1, 0);
+    lv_obj_set_style_border_color(view->future_periods_card, lv_color_hex(0x1f2937), 0);
+    lv_obj_set_style_pad_all(view->future_periods_card, 14, 0);
+    lv_obj_set_style_pad_row(view->future_periods_card, 10, 0);
+
+    lv_obj_t *future_periods_title = lv_label_create(view->future_periods_card);
+    lv_label_set_text(future_periods_title, "Future Periods");
+    lv_obj_set_style_text_color(future_periods_title, lv_color_white(), 0);
+
+    view->future_periods_value_label = lv_label_create(view->future_periods_card);
+    lv_obj_set_width(view->future_periods_value_label, lv_pct(100));
+    lv_label_set_long_mode(view->future_periods_value_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_color(view->future_periods_value_label, lv_color_hex(0x9ca3af), 0);
+
+    view->future_periods_button = ui_router_create_dark_button(view->future_periods_card, "Mode: Simplified");
+    lv_obj_set_width(view->future_periods_button, lv_pct(100));
+    lv_obj_set_style_bg_color(view->future_periods_button, lv_color_hex(0x1e293b), 0);
+    lv_obj_add_event_cb(view->future_periods_button, future_periods_mode_event_cb, LV_EVENT_CLICKED, view);
 
     view->region_card = ui_router_create_section_card(view->settings_content, lv_color_hex(0x111827));
     lv_obj_set_width(view->region_card, lv_pct(100));

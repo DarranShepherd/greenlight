@@ -422,16 +422,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 
         if (s_connect_in_progress && s_retry_count < WIFI_MANAGER_MAX_RETRIES) {
             s_retry_count++;
-            snprintf(
-                message,
-                sizeof(message),
-                "Retrying %s (%u/%u): %s",
-                s_target_ssid,
-                (unsigned int)s_retry_count,
-                (unsigned int)WIFI_MANAGER_MAX_RETRIES,
-                wifi_reason_to_string(disconnect_event->reason)
-            );
-            app_state_set_wifi_status(s_state, APP_WIFI_STATUS_CONNECTING, message);
+            set_status_with_ssid(APP_WIFI_STATUS_CONNECTING, "Connecting to", s_target_ssid);
             (void)esp_wifi_connect();
             return;
         }

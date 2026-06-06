@@ -291,22 +291,13 @@ static void update_primary_preview(ui_router_view_t *view, uint8_t index, const 
         );
         return;
     }
-
-    lv_label_set_text(view->primary_preview_time_labels[index], "Later");
-    lv_label_set_text(view->primary_preview_band_labels[index], "--");
-    style_preview_card(
-        view->primary_preview_cards[index],
-        view->primary_preview_time_labels[index],
-        view->primary_preview_band_labels[index],
-        TARIFF_BAND_NORMAL,
-        false
-    );
 }
 
 void ui_primary_update(const app_state_t *state, ui_router_view_t *view)
 {
     primary_palette_t palette = get_primary_palette(state);
     char clock_text[12] = {0};
+    uint8_t valid_preview_count = 0;
 
     lv_obj_set_style_bg_color(view->tiles[APP_SCREEN_PRIMARY], palette.tile_bg, 0);
     ui_router_format_clock_label(clock_text, sizeof(clock_text), state->local_time_text);
@@ -416,9 +407,43 @@ void ui_primary_update(const app_state_t *state, ui_router_view_t *view)
         set_primary_pulse_enabled(view, false);
     }
 
+    for (uint8_t index = 0; index < state->tariff_preview_count && index < APP_TARIFF_PREVIEW_MAX; index++) {
+        if (state->tariff_previews[index].valid) {
+            valid_preview_count++;
+        }
+    }
+
+    if (view->primary_section_label != NULL) {
+        if (valid_preview_count > 0) {
+            lv_obj_clear_flag(view->primary_section_label, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(view->primary_section_label, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    if (view->primary_preview_row != NULL) {
+        if (valid_preview_count > 0) {
+            lv_obj_clear_flag(view->primary_preview_row, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(view->primary_preview_row, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
     for (uint8_t index = 0; index < APP_TARIFF_PREVIEW_MAX; index++) {
         const app_tariff_preview_t *preview = index < state->tariff_preview_count ? &state->tariff_previews[index] : NULL;
-        update_primary_preview(view, index, preview);
+        bool show_preview = preview != NULL && preview->valid;
+
+        if (view->primary_preview_cards[index] == NULL) {
+            continue;
+        }
+
+        if (show_preview) {
+            lv_obj_clear_flag(view->primary_preview_cards[index], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_flex_grow(view->primary_preview_cards[index], 1);
+            update_primary_preview(view, index, preview);
+        } else {
+            lv_obj_add_flag(view->primary_preview_cards[index], LV_OBJ_FLAG_HIDDEN);
+        }
     }
 }
 
@@ -549,19 +574,19 @@ void ui_primary_create(lv_obj_t *tile, ui_router_view_t *view)
     view->primary_section_label = lv_label_create(tile);
     lv_label_set_text(view->primary_section_label, "Next periods");
 
-    lv_obj_t *preview_row = lv_obj_create(tile);
-    lv_obj_set_width(preview_row, lv_pct(100));
-    lv_obj_set_height(preview_row, 60);
-    lv_obj_set_style_bg_opa(preview_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(preview_row, 0, 0);
-    lv_obj_set_style_pad_all(preview_row, 0, 0);
-    lv_obj_set_style_pad_column(preview_row, 6, 0);
-    lv_obj_set_layout(preview_row, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(preview_row, LV_FLEX_FLOW_ROW);
-    lv_obj_clear_flag(preview_row, LV_OBJ_FLAG_SCROLLABLE);
+    view->primary_preview_row = lv_obj_create(tile);
+    lv_obj_set_width(view->primary_preview_row, lv_pct(100));
+    lv_obj_set_height(view->primary_preview_row, 60);
+    lv_obj_set_style_bg_opa(view->primary_preview_row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(view->primary_preview_row, 0, 0);
+    lv_obj_set_style_pad_all(view->primary_preview_row, 0, 0);
+    lv_obj_set_style_pad_column(view->primary_preview_row, 6, 0);
+    lv_obj_set_layout(view->primary_preview_row, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(view->primary_preview_row, LV_FLEX_FLOW_ROW);
+    lv_obj_clear_flag(view->primary_preview_row, LV_OBJ_FLAG_SCROLLABLE);
 
     for (uint8_t index = 0; index < APP_TARIFF_PREVIEW_MAX; index++) {
-        view->primary_preview_cards[index] = lv_obj_create(preview_row);
+        view->primary_preview_cards[index] = lv_obj_create(view->primary_preview_row);
         lv_obj_set_height(view->primary_preview_cards[index], lv_pct(100));
         lv_obj_set_flex_grow(view->primary_preview_cards[index], 1);
         lv_obj_set_style_radius(view->primary_preview_cards[index], 12, 0);

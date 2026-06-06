@@ -38,6 +38,12 @@ cc -std=c11 -Wall -Wextra -Werror -DGREENLIGHT_HOST_TEST \
     -o "$BUILD_DIR/test_sync_controller_refresh"
 
 cc -std=c11 -Wall -Wextra -Werror \
+    -I"$ROOT_DIR/main" \
+    "$ROOT_DIR/tools/test_histogram_layout.c" \
+    "$ROOT_DIR/main/histogram_layout.c" \
+    -o "$BUILD_DIR/test_histogram_layout"
+
+cc -std=c11 -Wall -Wextra -Werror \
     -include "$ROOT_DIR/tools/host_stubs/host_test_compat.h" \
     -I"$ROOT_DIR/tools/host_stubs" \
     -I"$ROOT_DIR/main" \
@@ -48,4 +54,5 @@ cc -std=c11 -Wall -Wextra -Werror \
 "$BUILD_DIR/test_octopus_client"
 "$BUILD_DIR/test_ota_manager_internal"
 "$BUILD_DIR/test_sync_controller_refresh"
+"$BUILD_DIR/test_histogram_layout"
 "$BUILD_DIR/test_wifi_reconnect_policy"

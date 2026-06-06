@@ -4,6 +4,7 @@ idf_component_register(
         "app_state.c"
         "board_profile.c"
         "docs_screenshot.c"
+        "histogram_layout.c"
         "lcd.c"
         "lcd_qspi_io.c"
         "lv_font_montserrat_20_numeric.c"

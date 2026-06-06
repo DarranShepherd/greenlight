@@ -15,6 +15,7 @@
 #include <esp_wifi.h>
 
 #include "app_settings.h"
+#include "wifi_reconnect_policy.h"
 
 #define WIFI_MANAGER_CONNECTED_BIT BIT0
 #define WIFI_MANAGER_FAILED_BIT BIT1
@@ -22,6 +23,7 @@
 #define WIFI_MANAGER_CONNECT_TIMEOUT_MS 45000
 #define WIFI_MANAGER_MAX_RETRIES 3
 #define WIFI_MANAGER_TASK_STACK_SIZE 8192
+#define WIFI_MANAGER_TASK_POLL_MS 500
 
 typedef enum {
     WIFI_MANAGER_COMMAND_SCAN = 0,
@@ -49,9 +51,15 @@ static bool s_connect_in_progress;
 static uint8_t s_retry_count;
 static wifi_err_reason_t s_last_disconnect_reason;
 static char s_target_ssid[APP_SETTINGS_WIFI_SSID_MAX_LEN + 1];
+static wifi_reconnect_policy_t s_reconnect_policy;
 
 static void wifi_manager_task(void *arg);
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
+static void schedule_background_reconnect(uint32_t delay_ms, const char *reason_text);
+static void clear_background_reconnect(void);
+static bool should_attempt_background_reconnect(uint32_t now_ms);
+static esp_err_t begin_connect_attempt(const char *ssid, const char *psk);
+static esp_err_t attempt_background_reconnect(void);
 
 static const char *wifi_reason_to_string(wifi_err_reason_t reason)
 {
@@ -131,6 +139,47 @@ static void set_status_with_ssid(app_wifi_status_t status, const char *prefix, c
     app_state_set_wifi_status(s_state, status, message);
 }
 
+static void clear_background_reconnect(void)
+{
+    wifi_reconnect_policy_reset(&s_reconnect_policy);
+}
+
+static void schedule_background_reconnect(uint32_t delay_ms, const char *reason_text)
+{
+    char message[APP_WIFI_STATUS_TEXT_MAX_LEN] = {0};
+    uint32_t delay_seconds = delay_ms / 1000;
+
+    wifi_reconnect_policy_schedule(&s_reconnect_policy, esp_log_timestamp());
+
+    if (reason_text != NULL && reason_text[0] != '\0' && s_target_ssid[0] != '\0') {
+        snprintf(
+            message,
+            sizeof(message),
+            "Wi-Fi lost (%s). Reconnecting to %s in %lus",
+            reason_text,
+            s_target_ssid,
+            (unsigned long)delay_seconds
+        );
+    } else if (s_target_ssid[0] != '\0') {
+        snprintf(
+            message,
+            sizeof(message),
+            "Wi-Fi lost. Reconnecting to %s in %lus",
+            s_target_ssid,
+            (unsigned long)delay_seconds
+        );
+    } else {
+        snprintf(message, sizeof(message), "Wi-Fi lost. Reconnecting in %lus", (unsigned long)delay_seconds);
+    }
+
+    app_state_set_wifi_status(s_state, APP_WIFI_STATUS_FAILED, message);
+}
+
+static bool should_attempt_background_reconnect(uint32_t now_ms)
+{
+    return wifi_reconnect_policy_is_due(&s_reconnect_policy, now_ms);
+}
+
 static void persist_connected_settings(const char *ssid, const char *psk)
 {
     app_settings_t settings = {0};
@@ -147,6 +196,39 @@ static void persist_connected_settings(const char *ssid, const char *psk)
     }
 
     app_state_set_settings(s_state, &settings);
+}
+
+static esp_err_t begin_connect_attempt(const char *ssid, const char *psk)
+{
+    wifi_config_t config = {0};
+    const wifi_ap_record_t *selected_ap = NULL;
+
+    if (ssid == NULL || ssid[0] == '\0') {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    copy_text((char *)config.sta.ssid, sizeof(config.sta.ssid), ssid);
+    copy_text((char *)config.sta.password, sizeof(config.sta.password), psk);
+    config.sta.threshold.authmode = WIFI_AUTH_OPEN;
+    config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+    config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+    config.sta.pmf_cfg.capable = true;
+    config.sta.pmf_cfg.required = false;
+
+    selected_ap = find_scanned_ap(ssid);
+    if (selected_ap != NULL && selected_ap->primary > 0) {
+        config.sta.channel = selected_ap->primary;
+    }
+
+    copy_text(s_target_ssid, sizeof(s_target_ssid), ssid);
+
+    esp_err_t ret = esp_wifi_set_config(WIFI_IF_STA, &config);
+    clear_sensitive_text((char *)config.sta.password, sizeof(config.sta.password));
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    return esp_wifi_connect();
 }
 
 static void finish_scan_status(uint8_t result_count)
@@ -197,8 +279,6 @@ static esp_err_t execute_scan(void)
 static esp_err_t execute_connect(const char *ssid, const char *psk)
 {
     EventBits_t bits = 0;
-    wifi_config_t config = {0};
-    const wifi_ap_record_t *selected_ap = NULL;
     esp_err_t ret = ESP_OK;
 
     if (ssid == NULL || ssid[0] == '\0') {
@@ -207,25 +287,11 @@ static esp_err_t execute_connect(const char *ssid, const char *psk)
         return ESP_ERR_INVALID_ARG;
     }
 
-    copy_text((char *)config.sta.ssid, sizeof(config.sta.ssid), ssid);
-    copy_text((char *)config.sta.password, sizeof(config.sta.password), psk);
-    config.sta.threshold.authmode = WIFI_AUTH_OPEN;
-    config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
-    config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
-    config.sta.pmf_cfg.capable = true;
-    config.sta.pmf_cfg.required = false;
-
-    selected_ap = find_scanned_ap(ssid);
-    if (selected_ap != NULL && selected_ap->primary > 0) {
-        config.sta.channel = selected_ap->primary;
-    }
-
-    copy_text(s_target_ssid, sizeof(s_target_ssid), ssid);
-
     s_retry_count = 0;
     s_connect_in_progress = true;
     s_is_connected = false;
     s_last_disconnect_reason = WIFI_REASON_UNSPECIFIED;
+    clear_background_reconnect();
     xEventGroupClearBits(s_event_group, WIFI_MANAGER_CONNECTED_BIT | WIFI_MANAGER_FAILED_BIT);
 
     app_state_set_active_screen(s_state, APP_SCREEN_SETTINGS);
@@ -235,12 +301,7 @@ static esp_err_t execute_connect(const char *ssid, const char *psk)
     app_state_set_local_time_text(s_state, "");
 
     (void)esp_wifi_disconnect();
-    ret = esp_wifi_set_config(WIFI_IF_STA, &config);
-    if (ret != ESP_OK) {
-        goto cleanup;
-    }
-
-    ret = esp_wifi_connect();
+    ret = begin_connect_attempt(ssid, psk);
     if (ret != ESP_OK) {
         goto cleanup;
     }
@@ -271,7 +332,44 @@ static esp_err_t execute_connect(const char *ssid, const char *psk)
     ret = ESP_ERR_TIMEOUT;
 
 cleanup:
-    clear_sensitive_text((char *)config.sta.password, sizeof(config.sta.password));
+    return ret;
+}
+
+static esp_err_t attempt_background_reconnect(void)
+{
+    app_settings_t settings = {0};
+    char message[APP_WIFI_STATUS_TEXT_MAX_LEN] = {0};
+    esp_err_t ret = ESP_OK;
+
+    if (s_state == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    app_state_get_settings(s_state, &settings);
+    if (settings.wifi_ssid[0] == '\0') {
+        clear_background_reconnect();
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    wifi_reconnect_policy_note_attempt_started(&s_reconnect_policy);
+    s_last_disconnect_reason = WIFI_REASON_UNSPECIFIED;
+
+    app_state_set_wifi_connection(s_state, settings.wifi_ssid, "");
+    snprintf(
+        message,
+        sizeof(message),
+        "Reconnecting to %s (attempt %lu)",
+        settings.wifi_ssid,
+        (unsigned long)s_reconnect_policy.reconnect_attempt_count
+    );
+    app_state_set_wifi_status(s_state, APP_WIFI_STATUS_CONNECTING, message);
+
+    ret = begin_connect_attempt(settings.wifi_ssid, settings.wifi_psk);
+    if (ret != ESP_OK) {
+        schedule_background_reconnect(wifi_reconnect_policy_current_delay_ms(&s_reconnect_policy), esp_err_to_name(ret));
+    }
+
+    clear_sensitive_text(settings.wifi_psk, sizeof(settings.wifi_psk));
     return ret;
 }
 
@@ -282,26 +380,29 @@ static void wifi_manager_task(void *arg)
     (void)arg;
 
     while (true) {
-        if (xQueueReceive(s_command_queue, &command, portMAX_DELAY) != pdTRUE) {
-            continue;
+        if (xQueueReceive(s_command_queue, &command, pdMS_TO_TICKS(WIFI_MANAGER_TASK_POLL_MS)) == pdTRUE) {
+            switch (command.type) {
+                case WIFI_MANAGER_COMMAND_SCAN:
+                    clear_background_reconnect();
+                    if (execute_scan() != ESP_OK) {
+                        app_state_set_wifi_status(s_state, APP_WIFI_STATUS_FAILED, "Wi-Fi scan failed");
+                    }
+                    break;
+
+                case WIFI_MANAGER_COMMAND_CONNECT:
+                    if (execute_connect(command.ssid, command.psk) != ESP_OK && !s_connect_in_progress) {
+                        app_state_set_active_screen(s_state, APP_SCREEN_SETTINGS);
+                    }
+                    clear_sensitive_text(command.psk, sizeof(command.psk));
+                    break;
+
+                default:
+                    break;
+            }
         }
 
-        switch (command.type) {
-            case WIFI_MANAGER_COMMAND_SCAN:
-                if (execute_scan() != ESP_OK) {
-                    app_state_set_wifi_status(s_state, APP_WIFI_STATUS_FAILED, "Wi-Fi scan failed");
-                }
-                break;
-
-            case WIFI_MANAGER_COMMAND_CONNECT:
-                if (execute_connect(command.ssid, command.psk) != ESP_OK && !s_connect_in_progress) {
-                    app_state_set_active_screen(s_state, APP_SCREEN_SETTINGS);
-                }
-                clear_sensitive_text(command.psk, sizeof(command.psk));
-                break;
-
-            default:
-                break;
+        if (should_attempt_background_reconnect(esp_log_timestamp())) {
+            (void)attempt_background_reconnect();
         }
     }
 }
@@ -313,6 +414,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         wifi_event_sta_disconnected_t *disconnect_event = (wifi_event_sta_disconnected_t *)event_data;
         char message[APP_WIFI_STATUS_TEXT_MAX_LEN] = {0};
+        bool was_connected = s_is_connected;
 
         s_is_connected = false;
         s_last_disconnect_reason = disconnect_event->reason;
@@ -334,6 +436,11 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
             return;
         }
 
+        if (wifi_reconnect_policy_should_schedule(&s_reconnect_policy, s_connect_in_progress, was_connected)) {
+            schedule_background_reconnect(wifi_reconnect_policy_current_delay_ms(&s_reconnect_policy), wifi_reason_to_string(disconnect_event->reason));
+            return;
+        }
+
         snprintf(
             message,
             sizeof(message),
@@ -342,7 +449,6 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
             disconnect_event->reason
         );
         app_state_set_wifi_status(s_state, APP_WIFI_STATUS_FAILED, message);
-        app_state_set_active_screen(s_state, APP_SCREEN_SETTINGS);
         xEventGroupSetBits(s_event_group, WIFI_MANAGER_FAILED_BIT);
         return;
     }
@@ -355,6 +461,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         snprintf(ip_address, sizeof(ip_address), IPSTR, IP2STR(&ip_event->ip_info.ip));
 
         s_is_connected = true;
+        wifi_reconnect_policy_note_connected(&s_reconnect_policy);
         app_state_set_wifi_connection(s_state, s_target_ssid, ip_address);
         snprintf(message, sizeof(message), "Connected to %s", s_target_ssid);
         app_state_set_wifi_status(s_state, APP_WIFI_STATUS_CONNECTED, message);

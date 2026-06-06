@@ -23,6 +23,7 @@ idf_component_register(
         "ui_router.c"
         "ui_settings.c"
         "wifi_manager.c"
+        "wifi_reconnect_policy.c"
     EMBED_TXTFILES
         "../certs/github-ota-root-bundle.pem"
         "../certs/octopus-amazon-root-ca-1.pem"

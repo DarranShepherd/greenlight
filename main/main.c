@@ -268,6 +268,7 @@ void app_main(void)
 
         if (wifi_connected && !was_wifi_connected) {
             ESP_ERROR_CHECK(time_manager_request_sync());
+            sync_controller_request_refresh();
         }
 
         was_wifi_connected = wifi_connected;

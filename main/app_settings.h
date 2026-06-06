@@ -37,6 +37,7 @@ typedef struct {
 } app_settings_t;
 
 void app_settings_set_defaults(app_settings_t *settings);
+bool app_settings_region_is_configured(const app_settings_t *settings);
 esp_err_t app_settings_init(void);
 esp_err_t app_settings_load(app_settings_t *settings);
 esp_err_t app_settings_save(const app_settings_t *settings);

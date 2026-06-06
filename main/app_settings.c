@@ -81,7 +81,6 @@ static void normalize_region_code(char *region_code, size_t region_code_size)
     }
 
     if (region_code[0] == '\0') {
-        strlcpy(region_code, "B", region_code_size);
         return;
     }
 
@@ -198,10 +197,14 @@ static esp_err_t store_touch_calibration(nvs_handle_t handle, const app_touch_ca
     return ESP_OK;
 }
 
+bool app_settings_region_is_configured(const app_settings_t *settings)
+{
+    return settings != NULL && settings->region_code[0] != '\0';
+}
+
 void app_settings_set_defaults(app_settings_t *settings)
 {
     memset(settings, 0, sizeof(*settings));
-    memcpy(settings->region_code, "B", 2);
     settings->brightness_percent = APP_SETTINGS_DEFAULT_BRIGHTNESS_PERCENT;
     settings->touch_calibration = *get_touch_calibration_seed();
 }

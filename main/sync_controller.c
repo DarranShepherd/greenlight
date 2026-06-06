@@ -36,6 +36,18 @@ static app_tariff_status_t s_tariff_status = APP_TARIFF_STATUS_IDLE;
 static bool s_refresh_requested;
 static char s_active_region_code[APP_SETTINGS_REGION_CODE_MAX_LEN + 1];
 
+static bool requested_region_is_configured(void)
+{
+    app_settings_t settings = {0};
+
+    if (s_state == NULL) {
+        return false;
+    }
+
+    app_state_get_settings(s_state, &settings);
+    return settings.region_code[0] != '\0';
+}
+
 static void get_requested_region_code(char *buffer, size_t buffer_size)
 {
     app_settings_t settings = {0};
@@ -45,13 +57,13 @@ static void get_requested_region_code(char *buffer, size_t buffer_size)
     }
 
     if (s_state == NULL) {
-        strlcpy(buffer, "B", buffer_size);
+        buffer[0] = '\0';
         return;
     }
 
     app_state_get_settings(s_state, &settings);
     if (settings.region_code[0] == '\0') {
-        strlcpy(buffer, "B", buffer_size);
+        buffer[0] = '\0';
         return;
     }
 
@@ -532,6 +544,14 @@ static void sync_controller_task(void *arg)
             continue;
         }
 
+        if (!requested_region_is_configured()) {
+            if (!s_has_successful_load) {
+                publish_waiting_status("Select your Octopus region before tariff fetch");
+            }
+            vTaskDelay(pdMS_TO_TICKS(SYNC_CONTROLLER_POLL_INTERVAL_MS));
+            continue;
+        }
+
         if (!wifi_manager_is_connected()) {
             if (!s_has_successful_load) {
                 publish_waiting_status("Waiting for Wi-Fi before tariff fetch");
@@ -592,6 +612,13 @@ void sync_controller_request_refresh(void)
     s_refresh_requested = true;
 
     if (s_state == NULL) {
+        return;
+    }
+
+    if (!requested_region_is_configured()) {
+        if (!s_has_successful_load) {
+            publish_waiting_status("Select your Octopus region before tariff fetch");
+        }
         return;
     }
 

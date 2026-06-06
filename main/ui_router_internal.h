@@ -44,6 +44,7 @@ typedef struct {
     lv_obj_t *primary_remaining_label;
     lv_obj_t *primary_change_label;
     lv_obj_t *primary_section_label;
+    lv_obj_t *primary_preview_row;
     lv_obj_t *primary_preview_cards[APP_TARIFF_PREVIEW_MAX];
     lv_obj_t *primary_preview_value_containers[APP_TARIFF_PREVIEW_MAX];
     lv_obj_t *primary_preview_time_labels[APP_TARIFF_PREVIEW_MAX];

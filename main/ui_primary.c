@@ -20,6 +20,8 @@ typedef struct {
     bool pulse;
 } primary_palette_t;
 
+static primary_palette_t get_primary_palette(const app_state_t *state);
+
 static lv_coord_t get_primary_hero_card_height(void)
 {
     const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
@@ -106,68 +108,73 @@ static const char *get_primary_band_indicator_symbol(tariff_band_t band)
     }
 }
 
+static primary_palette_t get_primary_palette_for_band(tariff_band_t band)
+{
+    switch (band) {
+        case TARIFF_BAND_SUPER_CHEAP:
+            return (primary_palette_t){
+                .tile_bg = lv_color_hex(0x050816),
+                .hero_bg = lv_color_hex(0x008c0c),
+                .chip_bg = lv_color_hex(0x62f05a),
+                .chip_text = lv_color_hex(0xeeff00),
+                .hero_text = lv_color_hex(0xeeff00),
+                .hero_muted_text = lv_color_hex(0xeeff00),
+                .footer_bg = lv_color_hex(0x007508),
+                .pulse = true,
+            };
+        case TARIFF_BAND_CHEAP:
+            return (primary_palette_t){
+                .tile_bg = lv_color_hex(0x050816),
+                .hero_bg = lv_color_hex(0x8ee45a),
+                .chip_bg = lv_color_hex(0xdfffba),
+                .chip_text = lv_color_hex(0x2c5900),
+                .hero_text = lv_color_hex(0x1f3e00),
+                .hero_muted_text = lv_color_hex(0x2c5900),
+                .footer_bg = lv_color_hex(0x66b53a),
+                .pulse = false,
+            };
+        case TARIFF_BAND_NORMAL:
+            return (primary_palette_t){
+                .tile_bg = lv_color_hex(0x050816),
+                .hero_bg = lv_color_hex(0xeeff00),
+                .chip_bg = lv_color_hex(0xf7ff70),
+                .chip_text = lv_color_hex(0x596200),
+                .hero_text = lv_color_hex(0x424900),
+                .hero_muted_text = lv_color_hex(0x596200),
+                .footer_bg = lv_color_hex(0xb6c900),
+                .pulse = false,
+            };
+        case TARIFF_BAND_EXPENSIVE:
+            return (primary_palette_t){
+                .tile_bg = lv_color_hex(0x050816),
+                .hero_bg = lv_color_hex(0xff8a00),
+                .chip_bg = lv_color_hex(0xffd299),
+                .chip_text = lv_color_hex(0x5d2500),
+                .hero_text = lv_color_hex(0x431800),
+                .hero_muted_text = lv_color_hex(0x5d2500),
+                .footer_bg = lv_color_hex(0xc85f00),
+                .pulse = false,
+            };
+        case TARIFF_BAND_VERY_EXPENSIVE:
+            return (primary_palette_t){
+                .tile_bg = lv_color_hex(0x050816),
+                .hero_bg = lv_color_hex(0xff1f0f),
+                .chip_bg = lv_color_hex(0xffb8b0),
+                .chip_text = lv_color_hex(0x650700),
+                .hero_text = lv_color_white(),
+                .hero_muted_text = lv_color_hex(0xffd9d4),
+                .footer_bg = lv_color_hex(0xc51206),
+                .pulse = true,
+            };
+        default:
+            return get_primary_palette(&(app_state_t){0});
+    }
+}
+
 static primary_palette_t get_primary_palette(const app_state_t *state)
 {
     if (state->tariff_has_data && state->tariff_current_block_valid) {
-        switch (state->tariff_current_band) {
-            case TARIFF_BAND_SUPER_CHEAP:
-                return (primary_palette_t){
-                    .tile_bg = lv_color_hex(0x052e2b),
-                    .hero_bg = lv_color_hex(0x0f766e),
-                    .chip_bg = lv_color_hex(0xccfbf1),
-                    .chip_text = lv_color_hex(0x134e4a),
-                    .hero_text = lv_color_white(),
-                    .hero_muted_text = lv_color_hex(0xe6fffa),
-                    .footer_bg = lv_color_hex(0x115e59),
-                    .pulse = true,
-                };
-            case TARIFF_BAND_CHEAP:
-                return (primary_palette_t){
-                    .tile_bg = lv_color_hex(0x0c2a1f),
-                    .hero_bg = lv_color_hex(0x166534),
-                    .chip_bg = lv_color_hex(0xdcfce7),
-                    .chip_text = lv_color_hex(0x14532d),
-                    .hero_text = lv_color_white(),
-                    .hero_muted_text = lv_color_hex(0xdcfce7),
-                    .footer_bg = lv_color_hex(0x14532d),
-                    .pulse = false,
-                };
-            case TARIFF_BAND_NORMAL:
-                return (primary_palette_t){
-                    .tile_bg = lv_color_hex(0x2d2214),
-                    .hero_bg = lv_color_hex(0xb45309),
-                    .chip_bg = lv_color_hex(0xfef3c7),
-                    .chip_text = lv_color_hex(0x78350f),
-                    .hero_text = lv_color_white(),
-                    .hero_muted_text = lv_color_hex(0xfff7ed),
-                    .footer_bg = lv_color_hex(0x92400e),
-                    .pulse = false,
-                };
-            case TARIFF_BAND_EXPENSIVE:
-                return (primary_palette_t){
-                    .tile_bg = lv_color_hex(0x3b1014),
-                    .hero_bg = lv_color_hex(0xc62828),
-                    .chip_bg = lv_color_hex(0xffe4e6),
-                    .chip_text = lv_color_hex(0x881337),
-                    .hero_text = lv_color_white(),
-                    .hero_muted_text = lv_color_hex(0xffe4e6),
-                    .footer_bg = lv_color_hex(0x9f1239),
-                    .pulse = false,
-                };
-            case TARIFF_BAND_VERY_EXPENSIVE:
-                return (primary_palette_t){
-                    .tile_bg = lv_color_hex(0x300d11),
-                    .hero_bg = lv_color_hex(0x991b1b),
-                    .chip_bg = lv_color_hex(0xfee2e2),
-                    .chip_text = lv_color_hex(0x7f1d1d),
-                    .hero_text = lv_color_white(),
-                    .hero_muted_text = lv_color_hex(0xfee2e2),
-                    .footer_bg = lv_color_hex(0x7f1d1d),
-                    .pulse = true,
-                };
-            default:
-                break;
-        }
+        return get_primary_palette_for_band(state->tariff_current_band);
     }
 
     if (state->tariff_status == APP_TARIFF_STATUS_OFFLINE) {
@@ -193,69 +200,6 @@ static primary_palette_t get_primary_palette(const app_state_t *state)
         .footer_bg = lv_color_hex(0x172033),
         .pulse = false,
     };
-}
-
-static primary_palette_t get_primary_palette_for_band(tariff_band_t band)
-{
-    switch (band) {
-        case TARIFF_BAND_SUPER_CHEAP:
-            return (primary_palette_t){
-                .tile_bg = lv_color_hex(0x052e2b),
-                .hero_bg = lv_color_hex(0x0f766e),
-                .chip_bg = lv_color_hex(0xccfbf1),
-                .chip_text = lv_color_hex(0x134e4a),
-                .hero_text = lv_color_white(),
-                .hero_muted_text = lv_color_hex(0xe6fffa),
-                .footer_bg = lv_color_hex(0x115e59),
-                .pulse = true,
-            };
-        case TARIFF_BAND_CHEAP:
-            return (primary_palette_t){
-                .tile_bg = lv_color_hex(0x0c2a1f),
-                .hero_bg = lv_color_hex(0x166534),
-                .chip_bg = lv_color_hex(0xdcfce7),
-                .chip_text = lv_color_hex(0x14532d),
-                .hero_text = lv_color_white(),
-                .hero_muted_text = lv_color_hex(0xdcfce7),
-                .footer_bg = lv_color_hex(0x14532d),
-                .pulse = false,
-            };
-        case TARIFF_BAND_NORMAL:
-            return (primary_palette_t){
-                .tile_bg = lv_color_hex(0x2d2214),
-                .hero_bg = lv_color_hex(0xb45309),
-                .chip_bg = lv_color_hex(0xfef3c7),
-                .chip_text = lv_color_hex(0x78350f),
-                .hero_text = lv_color_white(),
-                .hero_muted_text = lv_color_hex(0xfff7ed),
-                .footer_bg = lv_color_hex(0x92400e),
-                .pulse = false,
-            };
-        case TARIFF_BAND_EXPENSIVE:
-            return (primary_palette_t){
-                .tile_bg = lv_color_hex(0x3b1014),
-                .hero_bg = lv_color_hex(0xc62828),
-                .chip_bg = lv_color_hex(0xffe4e6),
-                .chip_text = lv_color_hex(0x881337),
-                .hero_text = lv_color_white(),
-                .hero_muted_text = lv_color_hex(0xffe4e6),
-                .footer_bg = lv_color_hex(0x9f1239),
-                .pulse = false,
-            };
-        case TARIFF_BAND_VERY_EXPENSIVE:
-            return (primary_palette_t){
-                .tile_bg = lv_color_hex(0x300d11),
-                .hero_bg = lv_color_hex(0x991b1b),
-                .chip_bg = lv_color_hex(0xfee2e2),
-                .chip_text = lv_color_hex(0x7f1d1d),
-                .hero_text = lv_color_white(),
-                .hero_muted_text = lv_color_hex(0xfee2e2),
-                .footer_bg = lv_color_hex(0x7f1d1d),
-                .pulse = true,
-            };
-        default:
-            return get_primary_palette(&(app_state_t){0});
-    }
 }
 
 static void primary_pulse_anim_cb(void *object, int32_t value)
@@ -403,11 +347,11 @@ void ui_primary_update(const app_state_t *state, ui_router_view_t *view)
 
     if (view->primary_pulse_dot != NULL) {
         lv_obj_set_style_bg_color(view->primary_pulse_dot, palette.chip_bg, 0);
-        lv_obj_set_style_outline_color(view->primary_pulse_dot, palette.chip_bg, 0);
+        lv_obj_set_style_outline_color(view->primary_pulse_dot, palette.hero_text, 0);
     }
 
     if (view->primary_pulse_icon_label != NULL) {
-        lv_obj_set_style_text_color(view->primary_pulse_icon_label, palette.hero_bg, 0);
+        lv_obj_set_style_text_color(view->primary_pulse_icon_label, palette.hero_text, 0);
     }
 
     if (view->primary_price_label != NULL) {
@@ -480,7 +424,7 @@ void ui_primary_update(const app_state_t *state, ui_router_view_t *view)
 
 void ui_primary_create(lv_obj_t *tile, ui_router_view_t *view)
 {
-    lv_obj_set_style_bg_color(tile, lv_color_hex(0x0f172a), 0);
+    lv_obj_set_style_bg_color(tile, lv_color_hex(0x050816), 0);
     lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(tile, 10, 0);
     lv_obj_set_layout(tile, LV_LAYOUT_FLEX);

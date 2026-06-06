@@ -13,6 +13,11 @@
 typedef struct {
     lv_obj_t *tileview;
     lv_obj_t *tiles[APP_SCREEN_COUNT];
+    lv_obj_t *navigation_overlay;
+    lv_obj_t *navigation_transition_scrim;
+    lv_obj_t *navigation_left_zone;
+    lv_obj_t *navigation_right_zone;
+    lv_obj_t *navigation_dots[APP_SCREEN_COUNT];
     lv_obj_t *startup_overlay;
     lv_obj_t *startup_logo_image;
     lv_obj_t *startup_title_label;
@@ -104,7 +109,9 @@ typedef struct {
     app_state_t *state;
     app_state_t state_snapshot;
     app_screen_t last_active_screen;
+    app_screen_t navigation_target_screen;
     bool onboarding_wifi_autoscan_requested;
+    bool navigation_transition_in_progress;
 } ui_router_view_t;
 
 uint8_t ui_router_clamp_brightness_value(int32_t brightness_percent);

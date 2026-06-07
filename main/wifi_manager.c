@@ -515,6 +515,7 @@ esp_err_t wifi_manager_start(void)
     }
 
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start Wi-Fi driver");
+    ESP_RETURN_ON_ERROR(esp_wifi_set_ps(WIFI_PS_NONE), TAG, "disable Wi-Fi power save");
     s_wifi_started = true;
     return ESP_OK;
 }

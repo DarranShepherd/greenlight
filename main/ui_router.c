@@ -28,6 +28,21 @@ static void apply_state_locked(const app_state_t *state);
 static void start_navigation_transition_locked(app_screen_t screen);
 static void gesture_event_cb(lv_event_t *event);
 
+static void update_tile_visibility_locked(app_screen_t primary_screen, app_screen_t secondary_screen)
+{
+    for (uint32_t index = 0; index < APP_SCREEN_COUNT; index++) {
+        if (s_view.tiles[index] == NULL) {
+            continue;
+        }
+
+        if (index == primary_screen || index == secondary_screen) {
+            lv_obj_clear_flag(s_view.tiles[index], LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(s_view.tiles[index], LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
 static void navigation_transition_scrim_anim_cb(void *object, int32_t value)
 {
     lv_obj_t *scrim = (lv_obj_t *)object;
@@ -42,6 +57,10 @@ static void navigation_transition_scrim_anim_cb(void *object, int32_t value)
 static void navigation_transition_finish_cb(lv_anim_t *animation)
 {
     LV_UNUSED(animation);
+
+    if (s_view.navigation_target_screen < APP_SCREEN_COUNT) {
+        update_tile_visibility_locked(s_view.navigation_target_screen, APP_SCREEN_COUNT);
+    }
 
     if (s_view.navigation_transition_scrim != NULL) {
         lv_obj_add_flag(s_view.navigation_transition_scrim, LV_OBJ_FLAG_HIDDEN);
@@ -88,13 +107,17 @@ static void start_navigation_transition_locked(app_screen_t screen)
     if (s_view.state_snapshot.startup_stage != APP_STARTUP_STAGE_COMPLETE || s_view.navigation_transition_scrim == NULL) {
         s_view.navigation_transition_in_progress = false;
         lv_tileview_set_tile_by_index(s_view.tileview, screen, 0, LV_ANIM_OFF);
+        update_tile_visibility_locked(screen, APP_SCREEN_COUNT);
         return;
     }
 
     if (lv_tileview_get_tile_active(s_view.tileview) == s_view.tiles[screen]) {
         s_view.navigation_transition_in_progress = false;
+        update_tile_visibility_locked(screen, APP_SCREEN_COUNT);
         return;
     }
+
+    update_tile_visibility_locked(s_view.state_snapshot.active_screen, screen);
 
     lv_anim_del(s_view.navigation_transition_scrim, navigation_transition_scrim_anim_cb);
     lv_obj_clear_flag(s_view.navigation_transition_scrim, LV_OBJ_FLAG_HIDDEN);
@@ -218,6 +241,7 @@ static void sync_tile_locked(const app_state_t *state)
     if (state->startup_stage != APP_STARTUP_STAGE_COMPLETE) {
         s_view.navigation_transition_in_progress = false;
         s_view.navigation_target_screen = APP_SCREEN_SETTINGS;
+        update_tile_visibility_locked(APP_SCREEN_SETTINGS, APP_SCREEN_COUNT);
         return;
     }
 
@@ -228,6 +252,7 @@ static void sync_tile_locked(const app_state_t *state)
     if (lv_tileview_get_tile_active(s_view.tileview) == s_view.tiles[state->active_screen]) {
         s_view.navigation_transition_in_progress = false;
         s_view.navigation_target_screen = state->active_screen;
+        update_tile_visibility_locked(state->active_screen, APP_SCREEN_COUNT);
         return;
     }
 
@@ -409,11 +434,11 @@ void ui_router_format_clock_label(char *buffer, size_t buffer_size, const char *
     strlcpy(buffer, local_time_text, buffer_size);
 }
 
-void ui_router_create_wifi_status(lv_obj_t *parent, lv_obj_t **wifi_label, lv_obj_t **wifi_strike)
+void ui_router_create_wifi_status(lv_obj_t *parent, lv_obj_t **ota_label, lv_obj_t **wifi_label, lv_obj_t **wifi_strike)
 {
     lv_obj_t *wifi_slot = NULL;
 
-    if (parent == NULL || wifi_label == NULL || wifi_strike == NULL) {
+    if (parent == NULL || ota_label == NULL || wifi_label == NULL || wifi_strike == NULL) {
         return;
     }
 
@@ -423,6 +448,13 @@ void ui_router_create_wifi_status(lv_obj_t *parent, lv_obj_t **wifi_label, lv_ob
     lv_obj_set_style_border_width(wifi_slot, 0, 0);
     lv_obj_set_style_pad_all(wifi_slot, 0, 0);
     lv_obj_remove_flag(wifi_slot, LV_OBJ_FLAG_SCROLLABLE);
+
+    *ota_label = lv_label_create(wifi_slot);
+    lv_label_set_text(*ota_label, LV_SYMBOL_DOWNLOAD);
+    lv_obj_set_width(*ota_label, 24);
+    lv_obj_set_style_text_align(*ota_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(*ota_label, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_add_flag(*ota_label, LV_OBJ_FLAG_HIDDEN);
 
     *wifi_label = lv_label_create(wifi_slot);
     lv_label_set_text(*wifi_label, LV_SYMBOL_WIFI);
@@ -459,19 +491,43 @@ void ui_router_create_wifi_status(lv_obj_t *parent, lv_obj_t **wifi_label, lv_ob
     lv_obj_move_foreground(*wifi_strike);
 }
 
-void ui_router_update_wifi_status(lv_obj_t *wifi_label, lv_obj_t *wifi_strike, app_wifi_status_t wifi_status, lv_color_t connected_color, lv_color_t disconnected_color)
+void ui_router_update_wifi_status(
+    lv_obj_t *ota_label,
+    lv_obj_t *wifi_label,
+    lv_obj_t *wifi_strike,
+    app_wifi_status_t wifi_status,
+    bool firmware_update_available,
+    lv_color_t connected_color,
+    lv_color_t disconnected_color
+)
 {
+    bool show_disconnected = wifi_status == APP_WIFI_STATUS_FAILED;
+
+    if (ota_label != NULL) {
+        lv_label_set_text(ota_label, LV_SYMBOL_DOWNLOAD);
+        lv_obj_set_style_text_color(ota_label, lv_color_white(), 0);
+        if (firmware_update_available) {
+            lv_obj_clear_flag(ota_label, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(ota_label, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
     if (wifi_label != NULL) {
         lv_label_set_text(wifi_label, LV_SYMBOL_WIFI);
         lv_obj_set_style_text_color(
             wifi_label,
-            wifi_status == APP_WIFI_STATUS_CONNECTED ? connected_color : disconnected_color,
+            show_disconnected ? disconnected_color : connected_color,
             0
         );
     }
 
     if (wifi_strike != NULL) {
-        lv_obj_add_flag(wifi_strike, LV_OBJ_FLAG_HIDDEN);
+        if (show_disconnected) {
+            lv_obj_clear_flag(wifi_strike, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(wifi_strike, LV_OBJ_FLAG_HIDDEN);
+        }
     }
 }
 
@@ -740,6 +796,7 @@ esp_err_t ui_router_init(app_state_t *state)
 
     lv_tileview_set_tile_by_index(s_view.tileview, 0, 0, LV_ANIM_OFF);
     s_view.navigation_target_screen = APP_SCREEN_PRIMARY;
+    update_tile_visibility_locked(APP_SCREEN_PRIMARY, APP_SCREEN_COUNT);
     apply_state_locked(&s_view.state_snapshot);
 
     lvgl_port_unlock();

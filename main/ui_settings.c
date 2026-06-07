@@ -970,9 +970,11 @@ void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
     }
 
     ui_router_update_wifi_status(
+        view->settings_ota_label,
         view->settings_wifi_label,
         view->settings_wifi_strike_label,
         state->wifi_status,
+        state->firmware_update_available,
         lv_color_white(),
         lv_color_hex(0xdc2626)
     );
@@ -1179,7 +1181,12 @@ void ui_settings_create(lv_obj_t *screen, lv_obj_t *tile, ui_router_view_t *view
     lv_obj_set_style_text_align(view->settings_title_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(view->settings_title_label, lv_color_white(), 0);
 
-    ui_router_create_wifi_status(view->settings_top_bar, &view->settings_wifi_label, &view->settings_wifi_strike_label);
+    ui_router_create_wifi_status(
+        view->settings_top_bar,
+        &view->settings_ota_label,
+        &view->settings_wifi_label,
+        &view->settings_wifi_strike_label
+    );
 
     view->settings_content = lv_obj_create(tile);
     lv_obj_set_width(view->settings_content, lv_pct(100));

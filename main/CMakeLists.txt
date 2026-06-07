@@ -27,6 +27,7 @@ idf_component_register(
         "wifi_manager.c"
         "wifi_reconnect_policy.c"
     EMBED_TXTFILES
+        "../certs/greenlight-pages-bundle.pem"
         "../certs/github-ota-root-bundle.pem"
         "../certs/octopus-amazon-root-ca-1.pem"
     INCLUDE_DIRS

@@ -103,13 +103,11 @@ esp_err_t lcd_init(esp_lcd_panel_io_handle_t *panel_io, esp_lcd_panel_handle_t *
     const greenlight_board_profile_t *board_profile = greenlight_board_profile_get();
     const greenlight_display_profile_t *display = &board_profile->display;
     size_t draw_buffer_size = (size_t)display->h_res * display->draw_buffer_lines;
-    size_t max_transfer_lines = display->draw_buffer_lines;
     size_t max_transfer_size = draw_buffer_size * sizeof(uint16_t);
 
 #if CONFIG_SPIRAM
-    if (display->bus_type == GREENLIGHT_DISPLAY_BUS_QSPI && max_transfer_lines < GREENLIGHT_QSPI_PSRAM_BUFFER_LINES) {
-        max_transfer_lines = GREENLIGHT_QSPI_PSRAM_BUFFER_LINES;
-        max_transfer_size = (size_t)display->h_res * max_transfer_lines * sizeof(uint16_t);
+    if (display->bus_type == GREENLIGHT_DISPLAY_BUS_QSPI && display->draw_buffer_lines < GREENLIGHT_QSPI_PSRAM_BUFFER_LINES) {
+        max_transfer_size = (size_t)display->h_res * GREENLIGHT_QSPI_PSRAM_BUFFER_LINES * sizeof(uint16_t);
     }
 #endif
 

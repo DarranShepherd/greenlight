@@ -10,7 +10,6 @@
 
 #include <esp_app_desc.h>
 #include <esp_check.h>
-#include <esp_heap_caps.h>
 #include <esp_http_client.h>
 #include <esp_https_ota.h>
 #include <esp_log.h>
@@ -26,9 +25,12 @@
 #define OTA_MANAGER_STACK_SIZE 12288
 #define OTA_MANAGER_MAX_HTTP_REQUEST_SIZE 4096
 #define OTA_MANAGER_DOWNLOAD_TIMEOUT_MS 60000
+#define OTA_MANAGER_METADATA_TIMEOUT_MS 45000
 #define OTA_MANAGER_HTTP_TX_BUFFER_BYTES 2048
 #define OTA_MANAGER_METADATA_URL_MAX_LEN 192
-#define OTA_MANAGER_METADATA_BUFFER_BYTES 2048
+#define OTA_MANAGER_METADATA_BUFFER_BYTES 16384
+#define OTA_MANAGER_METADATA_RETRY_COUNT 3
+#define OTA_MANAGER_METADATA_RETRY_DELAY_MS 3000
 
 typedef enum {
     OTA_MANAGER_COMMAND_CHECK = 0,
@@ -44,44 +46,52 @@ static app_state_t *s_state;
 static ota_release_metadata_t s_last_metadata;
 static bool s_have_metadata;
 static bool s_operation_in_progress;
-
-typedef struct {
-    char *buffer;
-    size_t buffer_size;
-    size_t length;
-    esp_err_t error;
-} ota_http_response_t;
+static esp_http_client_handle_t s_ota_install_http_client;
 
 #ifndef OTA_MANAGER_CERT_PEM
+extern const char greenlight_pages_bundle_pem_start[] asm("_binary_greenlight_pages_bundle_pem_start");
 extern const char github_ota_root_bundle_pem_start[] asm("_binary_github_ota_root_bundle_pem_start");
-extern const char github_ota_root_bundle_pem_end[] asm("_binary_github_ota_root_bundle_pem_end");
+#define OTA_MANAGER_METADATA_CERT_PEM greenlight_pages_bundle_pem_start
 #define OTA_MANAGER_CERT_PEM github_ota_root_bundle_pem_start
 #endif
 
 static void ota_manager_task(void *arg);
 
-static esp_err_t ota_http_event_handler(esp_http_client_event_t *event)
+static esp_err_t ota_install_http_client_init(esp_http_client_handle_t http_client)
 {
-    ota_http_response_t *response = event != NULL ? (ota_http_response_t *)event->user_data : NULL;
-
-    if (event == NULL || response == NULL) {
-        return ESP_OK;
-    }
-
-    if (event->event_id == HTTP_EVENT_ON_DATA && event->data != NULL && event->data_len > 0) {
-        size_t remaining_capacity = response->buffer_size - response->length;
-
-        if (response->buffer == NULL || response->buffer_size == 0 || remaining_capacity <= (size_t)event->data_len) {
-            response->error = ESP_ERR_NO_MEM;
-            return ESP_FAIL;
-        }
-
-        memcpy(&response->buffer[response->length], event->data, (size_t)event->data_len);
-        response->length += (size_t)event->data_len;
-        response->buffer[response->length] = '\0';
-    }
-
+    s_ota_install_http_client = http_client;
     return ESP_OK;
+}
+
+static void log_ota_install_http_failure(const char *phase, esp_err_t err)
+{
+    int esp_tls_error_code = 0;
+    int esp_tls_flags = 0;
+    int http_status = 0;
+    int http_errno = 0;
+    char url[OTA_RELEASE_URL_MAX_LEN] = {0};
+
+    if (s_ota_install_http_client == NULL) {
+        ESP_LOGW(TAG, "%s failed: %s", phase, esp_err_to_name(err));
+        return;
+    }
+
+    (void)esp_http_client_get_and_clear_last_tls_error(s_ota_install_http_client, &esp_tls_error_code, &esp_tls_flags);
+    (void)esp_http_client_get_url(s_ota_install_http_client, url, sizeof(url));
+    http_status = esp_http_client_get_status_code(s_ota_install_http_client);
+    http_errno = esp_http_client_get_errno(s_ota_install_http_client);
+
+    ESP_LOGW(
+        TAG,
+        "%s failed: %s http=%d errno=%d tls=0x%x flags=0x%x url=%s",
+        phase,
+        esp_err_to_name(err),
+        http_status,
+        http_errno,
+        esp_tls_error_code,
+        esp_tls_flags,
+        url[0] != '\0' ? url : "<unknown>"
+    );
 }
 
 static void set_firmware_status(
@@ -123,45 +133,39 @@ static const char *ota_manager_board_display_name(void)
     return board_profile->display_name;
 }
 
-static esp_err_t perform_get_request(const char *url, char *response_buffer, size_t response_buffer_size)
+static esp_err_t perform_get_request(const char *url, char **response_buffer)
 {
-    ota_http_response_t response = {
-        .buffer = response_buffer,
-        .buffer_size = response_buffer_size,
-        .length = 0,
-        .error = ESP_OK,
-    };
     esp_http_client_config_t http_config = {
         .url = url,
-        .timeout_ms = 15000,
-        .cert_pem = OTA_MANAGER_CERT_PEM,
+        .timeout_ms = OTA_MANAGER_METADATA_TIMEOUT_MS,
+        .cert_pem = OTA_MANAGER_METADATA_CERT_PEM,
         .buffer_size_tx = OTA_MANAGER_HTTP_TX_BUFFER_BYTES,
-        .event_handler = ota_http_event_handler,
-        .user_data = &response,
     };
     esp_http_client_handle_t http_client = NULL;
+    char *buffer = NULL;
     int http_status = 0;
+    int content_length = 0;
+    int bytes_read = 0;
     int esp_tls_error_code = 0;
     int esp_tls_flags = 0;
     esp_err_t err = ESP_OK;
 
-    ESP_RETURN_ON_FALSE(url != NULL && response_buffer != NULL && response_buffer_size > 1, ESP_ERR_INVALID_ARG, TAG, "HTTP request buffer required");
-
-    response_buffer[0] = '\0';
-    ESP_LOGI(
-        TAG,
-        "OTA GET start heap_free=%u largest=%u stack_hw=%u",
-        (unsigned int)esp_get_free_heap_size(),
-        (unsigned int)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-        (unsigned int)uxTaskGetStackHighWaterMark(NULL)
-    );
+    ESP_RETURN_ON_FALSE(url != NULL && response_buffer != NULL, ESP_ERR_INVALID_ARG, TAG, "HTTP request destination required");
+    *response_buffer = NULL;
     http_client = esp_http_client_init(&http_config);
     ESP_RETURN_ON_FALSE(http_client != NULL, ESP_ERR_NO_MEM, TAG, "create OTA HTTP client");
 
-    err = esp_http_client_perform(http_client);
+    err = esp_http_client_open(http_client, 0);
     if (err != ESP_OK) {
         (void)esp_http_client_get_and_clear_last_tls_error(http_client, &esp_tls_error_code, &esp_tls_flags);
         ESP_LOGW(TAG, "OTA GET %s failed: %s tls=0x%x flags=0x%x", url, esp_err_to_name(err), esp_tls_error_code, esp_tls_flags);
+        goto cleanup;
+    }
+
+    content_length = esp_http_client_fetch_headers(http_client);
+    if (content_length <= 0 || content_length >= OTA_MANAGER_METADATA_BUFFER_BYTES) {
+        ESP_LOGW(TAG, "OTA GET %s returned unsupported content length %d", url, content_length);
+        err = ESP_ERR_INVALID_SIZE;
         goto cleanup;
     }
 
@@ -172,20 +176,24 @@ static esp_err_t perform_get_request(const char *url, char *response_buffer, siz
         goto cleanup;
     }
 
-    if (response.error != ESP_OK) {
-        err = response.error;
+    buffer = calloc(1, (size_t)content_length + 1U);
+    if (buffer == NULL) {
+        err = ESP_ERR_NO_MEM;
         goto cleanup;
     }
 
-    ESP_LOGI(
-        TAG,
-        "OTA GET done heap_free=%u largest=%u stack_hw=%u",
-        (unsigned int)esp_get_free_heap_size(),
-        (unsigned int)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-        (unsigned int)uxTaskGetStackHighWaterMark(NULL)
-    );
+    bytes_read = esp_http_client_read_response(http_client, buffer, content_length);
+    if (bytes_read < 0 || bytes_read >= content_length + 1) {
+        err = ESP_FAIL;
+        goto cleanup;
+    }
+
+    buffer[bytes_read] = '\0';
+    *response_buffer = buffer;
+    buffer = NULL;
 
 cleanup:
+    free(buffer);
     if (http_client != NULL) {
         esp_http_client_close(http_client);
         esp_http_client_cleanup(http_client);
@@ -199,9 +207,7 @@ static void build_metadata_url(char *buffer, size_t buffer_size)
     snprintf(
         buffer,
         buffer_size,
-        "https://github.com/%s/%s/releases/latest/download/metadata.json",
-        CONFIG_GREENLIGHT_GITHUB_OWNER,
-        CONFIG_GREENLIGHT_GITHUB_REPO
+        "https://greenlight.ampernomics.com/firmware/metadata.json"
     );
 }
 
@@ -225,7 +231,7 @@ static esp_err_t perform_update_check(void)
     char current_version[APP_FIRMWARE_VERSION_TEXT_MAX_LEN] = {0};
     uint32_t current_version_code = 0;
     char metadata_url[OTA_MANAGER_METADATA_URL_MAX_LEN] = {0};
-    char metadata_json[OTA_MANAGER_METADATA_BUFFER_BYTES] = {0};
+    char *metadata_json = NULL;
     ota_release_metadata_t metadata = {0};
     esp_err_t err = ESP_OK;
     int version_compare = 0;
@@ -242,13 +248,36 @@ static esp_err_t perform_update_check(void)
     build_metadata_url(metadata_url, sizeof(metadata_url));
     octopus_client_release_memory();
     ESP_LOGI(TAG, "Checking firmware updates for board %s", board_id);
-    snprintf(status_text, sizeof(status_text), "Checking GitHub Releases for a %s build", board_display_name);
+    snprintf(status_text, sizeof(status_text), "Checking firmware metadata for %s", board_display_name);
     set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_CHECKING, false, "", 0, 0, status_text);
 
-    err = perform_get_request(metadata_url, metadata_json, sizeof(metadata_json));
+    for (uint8_t attempt = 0; attempt < OTA_MANAGER_METADATA_RETRY_COUNT; attempt++) {
+        free(metadata_json);
+        metadata_json = NULL;
+        err = perform_get_request(metadata_url, &metadata_json);
+        if (err == ESP_OK) {
+            break;
+        }
+
+        if (attempt + 1U >= OTA_MANAGER_METADATA_RETRY_COUNT || !wifi_manager_is_connected()) {
+            break;
+        }
+
+        ESP_LOGW(
+            TAG,
+            "OTA metadata check attempt %u/%u failed: %s. Retrying...",
+            (unsigned int)(attempt + 1U),
+            (unsigned int)OTA_MANAGER_METADATA_RETRY_COUNT,
+            esp_err_to_name(err)
+        );
+        octopus_client_release_memory();
+        vTaskDelay(pdMS_TO_TICKS(OTA_MANAGER_METADATA_RETRY_DELAY_MS));
+    }
+
     if (err != ESP_OK) {
         snprintf(status_text, sizeof(status_text), "Firmware update check failed for %s", board_display_name);
         set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, "", 0, 0, status_text);
+        free(metadata_json);
         return err;
     }
 
@@ -261,6 +290,7 @@ static esp_err_t perform_update_check(void)
             snprintf(status_text, sizeof(status_text), "Release manifest is incompatible with %s", board_display_name);
             set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, "", 0, 0, status_text);
         }
+        free(metadata_json);
         return err;
     }
 
@@ -268,6 +298,7 @@ static esp_err_t perform_update_check(void)
     if (err != ESP_OK) {
         snprintf(status_text, sizeof(status_text), "Release manifest is incompatible with %s", board_display_name);
         set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_ERROR, false, "", 0, 0, status_text);
+        free(metadata_json);
         return err;
     }
 
@@ -282,6 +313,7 @@ static esp_err_t perform_update_check(void)
     s_have_metadata = true;
 
     if (version_compare < 0) {
+        ESP_LOGI(TAG, "Firmware update available for %s: current=%s latest=%s", board_id, current_version, metadata.version);
         snprintf(status_text, sizeof(status_text), "Release %s is available for %s", metadata.version, board_display_name);
         set_firmware_status(
             APP_FIRMWARE_UPDATE_STATUS_AVAILABLE,
@@ -291,11 +323,14 @@ static esp_err_t perform_update_check(void)
             0,
             status_text
         );
+        free(metadata_json);
         return ESP_OK;
     }
 
+    ESP_LOGI(TAG, "Firmware already up to date for %s: %s", board_id, metadata.version);
     snprintf(status_text, sizeof(status_text), "%s already has the latest compatible release (%s)", board_display_name, metadata.version);
     set_firmware_status(APP_FIRMWARE_UPDATE_STATUS_UP_TO_DATE, false, metadata.version, metadata.version_code, 0, status_text);
+    free(metadata_json);
     return ESP_OK;
 }
 
@@ -390,13 +425,16 @@ static esp_err_t perform_update_install(void)
     http_config.buffer_size_tx = OTA_MANAGER_HTTP_TX_BUFFER_BYTES;
 
     octopus_client_release_memory();
+    s_ota_install_http_client = NULL;
     ota_config.http_config = &http_config;
+    ota_config.http_client_init_cb = ota_install_http_client_init;
 #if CONFIG_ESP_HTTPS_OTA_ENABLE_PARTIAL_DOWNLOAD
     ota_config.partial_http_download = true;
     ota_config.max_http_request_size = OTA_MANAGER_MAX_HTTP_REQUEST_SIZE;
 #endif
     err = esp_https_ota_begin(&ota_config, &ota_handle);
     if (err != ESP_OK) {
+        log_ota_install_http_failure("OTA begin", err);
         set_firmware_status(
             APP_FIRMWARE_UPDATE_STATUS_ERROR,
             true,
@@ -455,8 +493,10 @@ static esp_err_t perform_update_install(void)
     }
 
     if (err != ESP_OK) {
+        log_ota_install_http_failure("OTA perform", err);
         ESP_LOGW(TAG, "OTA download failed after %d bytes: %s", esp_https_ota_get_image_len_read(ota_handle), esp_err_to_name(err));
         (void)esp_https_ota_abort(ota_handle);
+        s_ota_install_http_client = NULL;
         set_firmware_status(
             APP_FIRMWARE_UPDATE_STATUS_ERROR,
             true,
@@ -472,6 +512,7 @@ static esp_err_t perform_update_install(void)
     if (!complete_data_received) {
         ESP_LOGW(TAG, "OTA download ended before complete image was received");
         (void)esp_https_ota_abort(ota_handle);
+        s_ota_install_http_client = NULL;
         set_firmware_status(
             APP_FIRMWARE_UPDATE_STATUS_ERROR,
             true,
@@ -485,6 +526,7 @@ static esp_err_t perform_update_install(void)
 
     err = esp_https_ota_finish(ota_handle);
     ota_handle = NULL;
+    s_ota_install_http_client = NULL;
     if (err != ESP_OK) {
         set_firmware_status(
             APP_FIRMWARE_UPDATE_STATUS_ERROR,

@@ -9,6 +9,17 @@
 #include "numeric_fonts.h"
 #include "tariff_model.h"
 
+#define PRIMARY_PULSE_FRAME_MS 50U
+
+static const lv_opa_t s_primary_pulse_lookup[] = {
+    30, 31, 32, 36, 40, 45, 51, 59, 67, 76, 86, 97, 108, 119, 131,
+    142, 154, 166, 177, 188, 199, 209, 218, 226, 234, 240, 245, 249, 253, 254,
+    255, 254, 253, 249, 245, 240, 234, 226, 218, 209, 199, 188, 177, 166, 154,
+    142, 131, 119, 108, 97, 86, 76, 67, 59, 51, 45, 40, 36, 32, 31,
+};
+
+#define PRIMARY_PULSE_PHASE_COUNT ((uint8_t)(sizeof(s_primary_pulse_lookup) / sizeof(s_primary_pulse_lookup[0])))
+
 typedef struct {
     lv_color_t tile_bg;
     lv_color_t hero_bg;
@@ -21,6 +32,8 @@ typedef struct {
 } primary_palette_t;
 
 static primary_palette_t get_primary_palette(const app_state_t *state);
+static void apply_primary_pulse_phase(ui_router_view_t *view);
+static void primary_pulse_timer_cb(lv_timer_t *timer);
 
 static lv_coord_t get_primary_hero_card_height(void)
 {
@@ -202,42 +215,63 @@ static primary_palette_t get_primary_palette(const app_state_t *state)
     };
 }
 
-static void primary_pulse_anim_cb(void *object, int32_t value)
+static void apply_primary_pulse_phase(ui_router_view_t *view)
 {
-    lv_obj_t *dot = (lv_obj_t *)object;
+    lv_opa_t opacity = LV_OPA_80;
 
-    if (dot == NULL) {
+    if (view == NULL || view->primary_pulse_dot == NULL) {
         return;
     }
 
-    lv_obj_set_style_bg_opa(dot, (lv_opa_t)value, 0);
-    lv_obj_set_style_outline_opa(dot, (lv_opa_t)(value / 2), 0);
+    if (view->primary_pulse_enabled) {
+        opacity = s_primary_pulse_lookup[view->primary_pulse_phase_index];
+    }
+
+    lv_obj_set_style_bg_opa(view->primary_pulse_dot, opacity, 0);
+    lv_obj_set_style_outline_opa(view->primary_pulse_dot, (lv_opa_t)(opacity / 2), 0);
+
+    if (view->primary_pulse_icon_label != NULL) {
+        lv_obj_set_style_text_opa(
+            view->primary_pulse_icon_label,
+            view->primary_pulse_enabled ? opacity : LV_OPA_COVER,
+            0
+        );
+    }
+}
+
+static void primary_pulse_timer_cb(lv_timer_t *timer)
+{
+    ui_router_view_t *view = timer != NULL ? (ui_router_view_t *)lv_timer_get_user_data(timer) : NULL;
+
+    if (view == NULL || !view->primary_pulse_enabled) {
+        return;
+    }
+
+    view->primary_pulse_phase_index = (uint8_t)((view->primary_pulse_phase_index + 1U) % PRIMARY_PULSE_PHASE_COUNT);
+    apply_primary_pulse_phase(view);
 }
 
 static void set_primary_pulse_enabled(ui_router_view_t *view, bool enabled)
 {
-    lv_anim_t animation;
-
-    if (view->primary_pulse_dot == NULL) {
+    if (view == NULL || view->primary_pulse_dot == NULL) {
         return;
     }
 
-    lv_anim_del(view->primary_pulse_dot, primary_pulse_anim_cb);
+    if (view->primary_pulse_timer == NULL) {
+        view->primary_pulse_timer = lv_timer_create(primary_pulse_timer_cb, PRIMARY_PULSE_FRAME_MS, view);
+    }
 
-    if (!enabled) {
-        lv_obj_set_style_bg_opa(view->primary_pulse_dot, LV_OPA_80, 0);
-        lv_obj_set_style_outline_opa(view->primary_pulse_dot, LV_OPA_30, 0);
+    if (view->primary_pulse_enabled == enabled) {
+        apply_primary_pulse_phase(view);
         return;
     }
 
-    lv_anim_init(&animation);
-    lv_anim_set_var(&animation, view->primary_pulse_dot);
-    lv_anim_set_exec_cb(&animation, primary_pulse_anim_cb);
-    lv_anim_set_values(&animation, LV_OPA_30, LV_OPA_COVER);
-    lv_anim_set_time(&animation, 900);
-    lv_anim_set_playback_time(&animation, 900);
-    lv_anim_set_repeat_count(&animation, LV_ANIM_REPEAT_INFINITE);
-    lv_anim_start(&animation);
+    view->primary_pulse_enabled = enabled;
+    if (enabled) {
+        view->primary_pulse_phase_index = 0;
+    }
+
+    apply_primary_pulse_phase(view);
 }
 
 static void style_preview_card(lv_obj_t *card, lv_obj_t *time_label, lv_obj_t *band_label, tariff_band_t band, bool active)
@@ -342,6 +376,8 @@ void ui_primary_update(const app_state_t *state, ui_router_view_t *view)
     if (view->primary_pulse_icon_label != NULL) {
         lv_obj_set_style_text_color(view->primary_pulse_icon_label, palette.hero_text, 0);
     }
+
+    apply_primary_pulse_phase(view);
 
     if (view->primary_price_label != NULL) {
         lv_obj_set_style_text_color(view->primary_price_label, palette.hero_text, 0);
@@ -548,6 +584,10 @@ void ui_primary_create(lv_obj_t *tile, ui_router_view_t *view)
     view->primary_pulse_icon_label = lv_label_create(view->primary_pulse_dot);
     lv_label_set_text(view->primary_pulse_icon_label, LV_SYMBOL_OK);
     lv_obj_center(view->primary_pulse_icon_label);
+
+    view->primary_pulse_phase_index = 0;
+    view->primary_pulse_enabled = false;
+    apply_primary_pulse_phase(view);
 
     lv_obj_t *hero_right_col = lv_obj_create(view->primary_hero_content_row);
     lv_obj_set_width(hero_right_col, 92);

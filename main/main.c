@@ -23,6 +23,8 @@
 #include "wifi_manager.h"
 
 #define ONBOARDING_SPLASH_MIN_MS 2000
+#define OTA_BACKGROUND_CHECK_INTERVAL_SECONDS (24 * 60 * 60)
+#define OTA_STARTUP_CHECK_DELAY_MS 15000
 
 static const char *TAG = "greenlight";
 static app_settings_t s_settings;
@@ -229,6 +231,9 @@ void app_main(void)
     lv_display_t *display = NULL;
     bool was_wifi_connected = false;
     bool tariff_entry_released = false;
+    bool startup_ota_check_requested = false;
+    time_t last_ota_check_time = 0;
+    uint32_t startup_ota_earliest_check_ms = 0;
 
     ESP_LOGI(TAG, "Starting Greenlight on %s (%s)", board_profile->display_name, board_profile->id);
 
@@ -325,6 +330,7 @@ void app_main(void)
         if (wifi_connected && !was_wifi_connected) {
             ESP_ERROR_CHECK(time_manager_request_sync());
             sync_controller_request_refresh();
+            startup_ota_earliest_check_ms = esp_log_timestamp() + OTA_STARTUP_CHECK_DELAY_MS;
         }
 
         was_wifi_connected = wifi_connected;
@@ -332,6 +338,30 @@ void app_main(void)
         update_display_brightness(&s_app_state);
         update_startup_stage(&s_app_state, wifi_connected);
         app_state_get_snapshot(&s_app_state, &s_state_snapshot);
+
+        if (wifi_connected) {
+            time_t now_local = s_state_snapshot.time_valid ? time(NULL) : 0;
+            bool ota_window_ready = esp_log_timestamp() >= startup_ota_earliest_check_ms;
+            bool tariff_refresh_idle = s_state_snapshot.tariff_status != APP_TARIFF_STATUS_LOADING;
+
+            if (!startup_ota_check_requested && now_local > 0 &&
+                s_state_snapshot.firmware_update_status != APP_FIRMWARE_UPDATE_STATUS_IDLE) {
+                startup_ota_check_requested = true;
+                last_ota_check_time = now_local;
+            }
+
+            if (!startup_ota_check_requested && now_local > 0 && ota_window_ready && tariff_refresh_idle) {
+                (void)ota_manager_request_check();
+                startup_ota_check_requested = true;
+                last_ota_check_time = now_local;
+            } else if (startup_ota_check_requested && now_local > 0 && tariff_refresh_idle) {
+                if ((now_local - last_ota_check_time) >= OTA_BACKGROUND_CHECK_INTERVAL_SECONDS) {
+                    (void)ota_manager_request_check();
+                    last_ota_check_time = now_local;
+                }
+            }
+        }
+
         onboarding_completed =
             s_previous_startup_stage == APP_STARTUP_STAGE_ONBOARDING &&
             s_state_snapshot.startup_stage == APP_STARTUP_STAGE_COMPLETE;

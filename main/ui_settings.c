@@ -107,6 +107,7 @@ static void reset_settings_view(ui_router_view_t *view)
     view->settings_top_bar = NULL;
     view->settings_clock_label = NULL;
     view->settings_title_label = NULL;
+    view->settings_ota_label = NULL;
     view->settings_wifi_label = NULL;
     view->settings_wifi_strike_label = NULL;
     view->wifi_card = NULL;
@@ -1172,9 +1173,11 @@ void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
     }
 
     ui_router_update_wifi_status(
+        view->settings_ota_label,
         view->settings_wifi_label,
         view->settings_wifi_strike_label,
         state->wifi_status,
+        state->firmware_update_available,
         lv_color_white(),
         lv_color_hex(0xdc2626)
     );
@@ -1299,7 +1302,7 @@ void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
         if (state->firmware_available_version[0] != '\0') {
             lv_label_set_text_fmt(view->firmware_available_label, "Compatible release: %s", state->firmware_available_version);
         } else if (state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_CHECKING) {
-            lv_label_set_text(view->firmware_available_label, "Compatible release: checking GitHub Releases");
+            lv_label_set_text(view->firmware_available_label, "Compatible release: checking firmware metadata");
         } else if (state->firmware_update_status == APP_FIRMWARE_UPDATE_STATUS_IDLE) {
             lv_label_set_text(view->firmware_available_label, "Compatible release: not checked yet");
         } else {
@@ -1397,7 +1400,12 @@ void ui_settings_create(lv_obj_t *screen, lv_obj_t *tile, ui_router_view_t *view
     lv_obj_set_style_text_align(view->settings_title_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(view->settings_title_label, lv_color_white(), 0);
 
-    ui_router_create_wifi_status(view->settings_top_bar, &view->settings_wifi_label, &view->settings_wifi_strike_label);
+    ui_router_create_wifi_status(
+        view->settings_top_bar,
+        &view->settings_ota_label,
+        &view->settings_wifi_label,
+        &view->settings_wifi_strike_label
+    );
 
     view->settings_content = lv_obj_create(tile);
     lv_obj_set_width(view->settings_content, lv_pct(100));

@@ -76,7 +76,15 @@ void app_state_init(app_state_t *state, const app_settings_t *settings)
     );
     app_state_set_tariff_primary(state, false, 0.0f, TARIFF_BAND_NORMAL, 0, 0, NULL, 0);
     app_state_set_firmware_info(state, "dev", 0);
-    app_state_set_firmware_status(state, APP_FIRMWARE_UPDATE_STATUS_IDLE, false, "", 0, 0, "Open Settings to check for firmware updates");
+    app_state_set_firmware_status(
+        state,
+        APP_FIRMWARE_UPDATE_STATUS_IDLE,
+        false,
+        "",
+        0,
+        0,
+        "Automatic firmware checks start after Wi-Fi and time sync"
+    );
 }
 
 void app_state_get_snapshot(const app_state_t *state, app_state_t *snapshot)

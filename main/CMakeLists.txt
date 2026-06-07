@@ -28,6 +28,7 @@ idf_component_register(
         "wifi_reconnect_policy.c"
     EMBED_TXTFILES
         "../certs/github-ota-root-bundle.pem"
+        "../certs/greenlight-pages-bundle.pem"
         "../certs/octopus-amazon-root-ca-1.pem"
     INCLUDE_DIRS
         "."

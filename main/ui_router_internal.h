@@ -39,6 +39,7 @@ typedef struct {
     lv_obj_t *primary_hero_center_col;
     lv_obj_t *primary_pulse_dot;
     lv_obj_t *primary_pulse_icon_label;
+    lv_timer_t *primary_pulse_timer;
     lv_obj_t *primary_price_label;
     lv_obj_t *primary_price_unit_label;
     lv_obj_t *primary_remaining_label;
@@ -114,8 +115,10 @@ typedef struct {
     app_state_t state_snapshot;
     app_screen_t last_active_screen;
     app_screen_t navigation_target_screen;
+    uint8_t primary_pulse_phase_index;
     bool onboarding_wifi_autoscan_requested;
     bool navigation_transition_in_progress;
+    bool primary_pulse_enabled;
 } ui_router_view_t;
 
 uint8_t ui_router_clamp_brightness_value(int32_t brightness_percent);

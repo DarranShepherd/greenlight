@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include <esp_heap_caps.h>
+#include <esp_log.h>
 #include <esp_lvgl_port.h>
 
 #include "lcd.h"
@@ -22,11 +24,99 @@
 #define NAVIGATION_TRANSITION_FADE_OUT_MS 90
 #define NAVIGATION_TRANSITION_SCRIM_OPA LV_OPA_30
 
+static const char *TAG = "ui_router";
+
 static ui_router_view_t s_view;
 
 static void apply_state_locked(const app_state_t *state);
+static void enable_gesture_bubble_recursive(lv_obj_t *root);
+static void ensure_screen_initialized_locked(app_screen_t screen);
+static void log_memory_stats_locked(const char *context);
 static void start_navigation_transition_locked(app_screen_t screen);
+static void teardown_screen_locked(app_screen_t screen);
+static void teardown_inactive_screens_locked(app_screen_t active_screen);
 static void gesture_event_cb(lv_event_t *event);
+
+static void log_memory_stats_locked(const char *context)
+{
+    lv_mem_monitor_t monitor;
+
+    lv_mem_monitor(&monitor);
+    ESP_LOGI(
+        TAG,
+        "%s: heap free=%u min=%u largest=%u lvgl free=%u biggest=%u used=%u%% frag=%u%%",
+        context != NULL ? context : "ui-memory",
+        (unsigned int)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+        (unsigned int)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
+        (unsigned int)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+        (unsigned int)monitor.free_size,
+        (unsigned int)monitor.free_biggest_size,
+        (unsigned int)monitor.used_pct,
+        (unsigned int)monitor.frag_pct
+    );
+}
+
+static void teardown_inactive_screens_locked(app_screen_t active_screen)
+{
+    for (app_screen_t screen = APP_SCREEN_PRIMARY; screen < APP_SCREEN_COUNT; screen++) {
+        if (screen == active_screen) {
+            continue;
+        }
+
+        teardown_screen_locked(screen);
+    }
+}
+
+static void teardown_screen_locked(app_screen_t screen)
+{
+    switch (screen) {
+        case APP_SCREEN_DETAIL:
+            if (s_view.detail_top_bar != NULL) {
+                ui_detail_destroy(s_view.tiles[APP_SCREEN_DETAIL], &s_view);
+            }
+            break;
+        case APP_SCREEN_SETTINGS:
+            if (s_view.settings_top_bar != NULL) {
+                ui_settings_destroy(s_view.tiles[APP_SCREEN_SETTINGS], &s_view);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+static void ensure_screen_initialized_locked(app_screen_t screen)
+{
+    if (screen >= APP_SCREEN_COUNT) {
+        return;
+    }
+
+    switch (screen) {
+        case APP_SCREEN_PRIMARY:
+            if (s_view.primary_top_bar != NULL) {
+                return;
+            }
+            ui_primary_create(s_view.tiles[screen], &s_view);
+            break;
+        case APP_SCREEN_DETAIL:
+            if (s_view.detail_top_bar != NULL) {
+                return;
+            }
+            log_memory_stats_locked("detail screen before create");
+            ui_detail_create(s_view.tiles[screen], &s_view);
+            enable_gesture_bubble_recursive(s_view.tiles[screen]);
+            log_memory_stats_locked("detail screen after create");
+            break;
+        case APP_SCREEN_SETTINGS:
+            if (s_view.settings_top_bar != NULL) {
+                return;
+            }
+            ui_settings_create(lv_screen_active(), s_view.tiles[screen], &s_view);
+            break;
+        default:
+            return;
+    }
+}
 
 static void navigation_transition_scrim_anim_cb(void *object, int32_t value)
 {
@@ -114,7 +204,7 @@ static void start_navigation_transition_locked(app_screen_t screen)
 
 static bool navigation_input_blocked(void)
 {
-    if (s_view.state_snapshot.startup_stage != APP_STARTUP_STAGE_COMPLETE) {
+    if (s_view.state_snapshot.startup_stage == APP_STARTUP_STAGE_BOOTING) {
         return true;
     }
 
@@ -215,9 +305,9 @@ static void sync_tile_locked(const app_state_t *state)
         return;
     }
 
-    if (state->startup_stage != APP_STARTUP_STAGE_COMPLETE) {
+    if (state->startup_stage == APP_STARTUP_STAGE_BOOTING) {
         s_view.navigation_transition_in_progress = false;
-        s_view.navigation_target_screen = APP_SCREEN_SETTINGS;
+        s_view.navigation_target_screen = state->active_screen;
         return;
     }
 
@@ -548,12 +638,26 @@ static void tileview_event_cb(lv_event_t *event)
 
 static void apply_state_locked(const app_state_t *state)
 {
+    bool active_screen_changed = false;
+    app_screen_t previous_active_screen = s_view.last_active_screen;
+
+    if (state == NULL) {
+        return;
+    }
+
     if (state->active_screen != s_view.last_active_screen) {
+        active_screen_changed = true;
         s_view.last_active_screen = state->active_screen;
         if (state->active_screen == APP_SCREEN_SETTINGS) {
             (void)ota_manager_request_check();
         }
     }
+
+    if (active_screen_changed && previous_active_screen < APP_SCREEN_COUNT && previous_active_screen != state->active_screen) {
+        teardown_screen_locked(previous_active_screen);
+    }
+
+    ensure_screen_initialized_locked(state->active_screen);
 
     if (s_view.startup_overlay != NULL) {
         if (state->startup_stage == APP_STARTUP_STAGE_BOOTING) {
@@ -576,22 +680,38 @@ static void apply_state_locked(const app_state_t *state)
     }
 
     if (s_view.tileview != NULL) {
-        if (state->startup_stage == APP_STARTUP_STAGE_COMPLETE) {
+        if (state->startup_stage == APP_STARTUP_STAGE_BOOTING) {
             lv_obj_clear_flag(s_view.tileview, LV_OBJ_FLAG_SCROLLABLE);
-        } else {
-            lv_obj_clear_flag(s_view.tileview, LV_OBJ_FLAG_SCROLLABLE);
-            if (lv_tileview_get_tile_active(s_view.tileview) != s_view.tiles[APP_SCREEN_SETTINGS]) {
-                lv_tileview_set_tile_by_index(s_view.tileview, APP_SCREEN_SETTINGS, 0, LV_ANIM_OFF);
+            if (lv_tileview_get_tile_active(s_view.tileview) != s_view.tiles[state->active_screen]) {
+                lv_tileview_set_tile_by_index(s_view.tileview, state->active_screen, 0, LV_ANIM_OFF);
             }
+        } else {
+            lv_obj_add_flag(s_view.tileview, LV_OBJ_FLAG_SCROLLABLE);
         }
     }
 
     sync_tile_locked(state);
     update_navigation_zones_locked(state);
     update_page_dots_locked(state);
-    ui_primary_update(state, &s_view);
-    ui_detail_update(state, &s_view);
-    ui_settings_update(state, &s_view);
+
+    switch (state->active_screen) {
+        case APP_SCREEN_PRIMARY:
+            ui_primary_update(state, &s_view);
+            break;
+        case APP_SCREEN_DETAIL:
+            ui_detail_update(state, &s_view);
+            break;
+        case APP_SCREEN_SETTINGS:
+            ui_settings_update(state, &s_view);
+            break;
+        default:
+            break;
+    }
+
+    if (active_screen_changed) {
+        teardown_inactive_screens_locked(state->active_screen);
+        log_memory_stats_locked(app_state_get_screen_name(state->active_screen));
+    }
 }
 
 esp_err_t ui_router_init(app_state_t *state)
@@ -631,13 +751,12 @@ esp_err_t ui_router_init(app_state_t *state)
     s_view.tiles[APP_SCREEN_SETTINGS] = lv_tileview_add_tile(s_view.tileview, 2, 0, LV_DIR_LEFT);
 
     ui_primary_create(s_view.tiles[APP_SCREEN_PRIMARY], &s_view);
-    ui_detail_create(s_view.tiles[APP_SCREEN_DETAIL], &s_view);
-    ui_settings_create(screen, s_view.tiles[APP_SCREEN_SETTINGS], &s_view);
 
     for (uint32_t index = 0; index < APP_SCREEN_COUNT; index++) {
-        enable_gesture_bubble_recursive(s_view.tiles[index]);
         lv_obj_add_event_cb(s_view.tiles[index], gesture_event_cb, LV_EVENT_GESTURE, NULL);
     }
+
+    enable_gesture_bubble_recursive(s_view.tiles[APP_SCREEN_PRIMARY]);
 
     if (s_view.wifi_keyboard != NULL) {
         lv_obj_clear_flag(s_view.wifi_keyboard, LV_OBJ_FLAG_GESTURE_BUBBLE);
@@ -741,6 +860,7 @@ esp_err_t ui_router_init(app_state_t *state)
     lv_tileview_set_tile_by_index(s_view.tileview, 0, 0, LV_ANIM_OFF);
     s_view.navigation_target_screen = APP_SCREEN_PRIMARY;
     apply_state_locked(&s_view.state_snapshot);
+    log_memory_stats_locked("router init complete");
 
     lvgl_port_unlock();
     return ESP_OK;

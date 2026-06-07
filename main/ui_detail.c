@@ -1,5 +1,6 @@
 #include "ui_router_internal.h"
 
+#include <string.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -9,6 +10,30 @@
 #define DETAIL_DAY_INDEX_TODAY 0
 #define DETAIL_DAY_INDEX_TOMORROW 1
 #define DETAIL_DAY_COUNT 2
+
+static void reset_detail_view(ui_router_view_t *view)
+{
+    if (view == NULL) {
+        return;
+    }
+
+    view->detail_status_label = NULL;
+    view->detail_updated_label = NULL;
+    view->detail_top_bar = NULL;
+    view->detail_clock_label = NULL;
+    view->detail_title_label = NULL;
+    view->detail_wifi_label = NULL;
+    view->detail_wifi_strike = NULL;
+    memset(view->detail_day_panels, 0, sizeof(view->detail_day_panels));
+    memset(view->detail_day_titles, 0, sizeof(view->detail_day_titles));
+    memset(view->detail_day_bar_rows, 0, sizeof(view->detail_day_bar_rows));
+    memset(view->detail_day_bars, 0, sizeof(view->detail_day_bars));
+    memset(view->detail_day_zero_lines, 0, sizeof(view->detail_day_zero_lines));
+    memset(view->detail_day_time_markers, 0, sizeof(view->detail_day_time_markers));
+    memset(view->detail_day_min_labels, 0, sizeof(view->detail_day_min_labels));
+    memset(view->detail_day_avg_labels, 0, sizeof(view->detail_day_avg_labels));
+    memset(view->detail_day_max_labels, 0, sizeof(view->detail_day_max_labels));
+}
 
 static lv_coord_t get_detail_chart_shell_height(void)
 {
@@ -341,6 +366,16 @@ void ui_detail_create(lv_obj_t *tile, ui_router_view_t *view)
     view->detail_top_bar = lv_obj_create(tile);
     lv_obj_set_width(view->detail_top_bar, lv_pct(100));
     lv_obj_set_height(view->detail_top_bar, LV_SIZE_CONTENT);
+
+void ui_detail_destroy(lv_obj_t *tile, ui_router_view_t *view)
+{
+    if (tile == NULL || view == NULL || view->detail_top_bar == NULL) {
+        return;
+    }
+
+    lv_obj_clean(tile);
+    reset_detail_view(view);
+}
     lv_obj_set_style_bg_opa(view->detail_top_bar, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(view->detail_top_bar, 0, 0);
     lv_obj_set_style_pad_all(view->detail_top_bar, 0, 0);
@@ -508,4 +543,14 @@ void ui_detail_create(lv_obj_t *tile, ui_router_view_t *view)
         lv_obj_set_width(view->detail_day_max_labels[day_index], 48);
         lv_obj_set_style_text_align(view->detail_day_max_labels[day_index], LV_TEXT_ALIGN_RIGHT, 0);
     }
+}
+
+void ui_detail_destroy(lv_obj_t *tile, ui_router_view_t *view)
+{
+    if (tile == NULL || view == NULL || view->detail_top_bar == NULL) {
+        return;
+    }
+
+    lv_obj_clean(tile);
+    reset_detail_view(view);
 }

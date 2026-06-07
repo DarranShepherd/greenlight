@@ -33,6 +33,7 @@ static night_mode_policy_t s_night_mode_policy;
 static bool s_onboarding_session_active;
 static uint32_t s_onboarding_splash_deadline_ms;
 static int s_applied_backlight_percent = -1;
+static app_startup_stage_t s_previous_startup_stage = APP_STARTUP_STAGE_BOOTING;
 
 static bool should_hold_onboarding_splash(void)
 {
@@ -242,8 +243,8 @@ void app_main(void)
 #if !CONFIG_GREENLIGHT_DOCS_SCREENSHOT_MODE
     s_onboarding_session_active = !app_settings_region_is_configured(&s_state_snapshot.settings) || !s_state_snapshot.wifi_has_saved_credentials;
     s_onboarding_splash_deadline_ms = esp_log_timestamp() + ONBOARDING_SPLASH_MIN_MS;
+    s_previous_startup_stage = s_state_snapshot.startup_stage;
     if (s_onboarding_session_active) {
-        app_state_set_active_screen(&s_app_state, APP_SCREEN_SETTINGS);
         app_state_set_startup_stage(&s_app_state, APP_STARTUP_STAGE_BOOTING, "Starting Greenlight");
     }
 #endif
@@ -317,6 +318,7 @@ void app_main(void)
 
     while (true) {
         bool wifi_connected = wifi_manager_is_connected();
+        bool onboarding_completed = false;
 
         app_state_set_uptime(&s_app_state, esp_log_timestamp() / 1000);
 
@@ -330,17 +332,32 @@ void app_main(void)
         update_display_brightness(&s_app_state);
         update_startup_stage(&s_app_state, wifi_connected);
         app_state_get_snapshot(&s_app_state, &s_state_snapshot);
+        onboarding_completed =
+            s_previous_startup_stage == APP_STARTUP_STAGE_ONBOARDING &&
+            s_state_snapshot.startup_stage == APP_STARTUP_STAGE_COMPLETE;
 
         if (s_state_snapshot.startup_stage == APP_STARTUP_STAGE_ONBOARDING) {
-            app_state_set_active_screen(&s_app_state, APP_SCREEN_SETTINGS);
-        } else if (!tariff_entry_released && s_state_snapshot.startup_stage == APP_STARTUP_STAGE_COMPLETE) {
+            if (s_state_snapshot.active_screen != APP_SCREEN_SETTINGS) {
+                app_state_set_active_screen(&s_app_state, APP_SCREEN_SETTINGS);
+                app_state_get_snapshot(&s_app_state, &s_state_snapshot);
+            }
+        }
+
+        if (onboarding_completed && s_state_snapshot.active_screen != APP_SCREEN_PRIMARY) {
+            app_state_set_active_screen(&s_app_state, APP_SCREEN_PRIMARY);
+            app_state_get_snapshot(&s_app_state, &s_state_snapshot);
+        }
+
+        if (!tariff_entry_released && s_state_snapshot.startup_stage == APP_STARTUP_STAGE_COMPLETE) {
             if (s_state_snapshot.tariff_has_data && s_state_snapshot.tariff_current_block_valid) {
                 app_state_set_active_screen(&s_app_state, APP_SCREEN_PRIMARY);
+                app_state_get_snapshot(&s_app_state, &s_state_snapshot);
                 tariff_entry_released = true;
             }
         }
 
         ESP_ERROR_CHECK(ui_router_update(&s_app_state));
+        s_previous_startup_stage = s_state_snapshot.startup_stage;
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

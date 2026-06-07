@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <esp_heap_caps.h>
+#include <esp_log.h>
+
 #include "board_profile.h"
 #include "numeric_fonts.h"
 #include "ota_manager.h"
@@ -24,6 +27,8 @@
 #define TOUCH_CALIBRATION_MIN_PRESS_SAMPLES 6
 #define TOUCH_CALIBRATION_MAX_COMPONENT_ERROR_PX 18
 #define TOUCH_CALIBRATION_MAX_AVERAGE_ERROR_PX 14
+
+static const char *TAG = "ui_settings";
 
 typedef struct {
     char code;
@@ -73,6 +78,196 @@ static const char *s_touch_calibration_prompts[TOUCH_CALIBRATION_POINT_COUNT] = 
 };
 
 static lv_point_t convert_display_point_to_touch_space(lv_point_t display_point);
+static void wifi_keyboard_event_cb(lv_event_t *event);
+static void touch_calibration_overlay_event_cb(lv_event_t *event);
+static void ensure_wifi_keyboard_created(ui_router_view_t *view);
+static void ensure_touch_calibration_overlay_created(ui_router_view_t *view);
+
+static void reset_settings_view(ui_router_view_t *view)
+{
+    if (view == NULL) {
+        return;
+    }
+
+    view->settings_content = NULL;
+    view->onboarding_card = NULL;
+    view->onboarding_step_label = NULL;
+    view->onboarding_status_label = NULL;
+    view->onboarding_retry_button = NULL;
+    view->brightness_card = NULL;
+    view->brightness_label = NULL;
+    view->brightness_bar = NULL;
+    view->future_periods_card = NULL;
+    view->future_periods_value_label = NULL;
+    view->future_periods_button = NULL;
+    view->region_card = NULL;
+    view->region_label = NULL;
+    view->region_dropdown = NULL;
+    view->region_continue_button = NULL;
+    view->settings_top_bar = NULL;
+    view->settings_clock_label = NULL;
+    view->settings_title_label = NULL;
+    view->settings_wifi_label = NULL;
+    view->settings_wifi_strike_label = NULL;
+    view->wifi_card = NULL;
+    view->wifi_status_label = NULL;
+    view->time_status_label = NULL;
+    view->local_time_label = NULL;
+    view->touch_card = NULL;
+    view->time_card = NULL;
+    view->firmware_card = NULL;
+    view->firmware_version_label = NULL;
+    view->firmware_available_label = NULL;
+    view->firmware_status_label = NULL;
+    view->firmware_update_button = NULL;
+    view->firmware_update_button_label = NULL;
+    view->firmware_update_progress_bar = NULL;
+    view->wifi_dropdown = NULL;
+    view->wifi_psk_textarea = NULL;
+    view->wifi_keyboard = NULL;
+    view->wifi_scan_summary_label = NULL;
+    view->touch_calibration_label = NULL;
+    view->touch_calibration_overlay = NULL;
+    view->touch_calibration_prompt = NULL;
+    view->touch_calibration_target = NULL;
+    view->touch_calibration_target_crosshair_h = NULL;
+    view->touch_calibration_target_crosshair_v = NULL;
+    view->touch_calibration_target_center_dot = NULL;
+    memset(view->touch_calibration_samples, 0, sizeof(view->touch_calibration_samples));
+    memset(view->touch_calibration_press_samples, 0, sizeof(view->touch_calibration_press_samples));
+    view->touch_calibration_press_sample_count = 0;
+    view->touch_calibration_step = 0;
+    memset(view->wifi_dropdown_cache, 0, sizeof(view->wifi_dropdown_cache));
+}
+
+static void log_settings_memory(const char *context)
+{
+    lv_mem_monitor_t monitor;
+
+    lv_mem_monitor(&monitor);
+    ESP_LOGI(
+        TAG,
+        "%s: heap free=%u min=%u largest=%u lvgl free=%u biggest=%u used=%u%% frag=%u%%",
+        context != NULL ? context : "settings-memory",
+        (unsigned int)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+        (unsigned int)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
+        (unsigned int)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+        (unsigned int)monitor.free_size,
+        (unsigned int)monitor.free_biggest_size,
+        (unsigned int)monitor.used_pct,
+        (unsigned int)monitor.frag_pct
+    );
+}
+
+static void ensure_wifi_keyboard_created(ui_router_view_t *view)
+{
+    if (view == NULL || view->wifi_keyboard != NULL) {
+        return;
+    }
+
+    log_settings_memory("before keyboard create");
+
+    view->wifi_keyboard = lv_keyboard_create(view->tiles[APP_SCREEN_SETTINGS]);
+    lv_obj_set_width(view->wifi_keyboard, lv_pct(100));
+    lv_obj_set_height(view->wifi_keyboard, 150);
+    lv_obj_set_style_radius(view->wifi_keyboard, 16, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(view->wifi_keyboard, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(view->wifi_keyboard, lv_color_hex(0x020617), LV_PART_MAIN);
+    lv_obj_set_style_border_width(view->wifi_keyboard, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(view->wifi_keyboard, lv_color_hex(0x334155), LV_PART_MAIN);
+    lv_obj_set_style_pad_all(view->wifi_keyboard, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_gap(view->wifi_keyboard, 6, LV_PART_MAIN);
+    lv_obj_set_style_radius(view->wifi_keyboard, 10, LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(view->wifi_keyboard, LV_OPA_COVER, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(view->wifi_keyboard, lv_color_hex(0x1e293b), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(view->wifi_keyboard, lv_color_hex(0x334155), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(view->wifi_keyboard, lv_color_hex(0x2563eb), LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(view->wifi_keyboard, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_border_width(view->wifi_keyboard, 0, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(view->wifi_keyboard, 0, LV_PART_ITEMS);
+    lv_obj_add_event_cb(view->wifi_keyboard, wifi_keyboard_event_cb, LV_EVENT_ALL, view);
+    lv_obj_add_flag(view->wifi_keyboard, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(view->wifi_keyboard, LV_OBJ_FLAG_GESTURE_BUBBLE);
+
+    log_settings_memory("after keyboard create");
+}
+
+static void ensure_touch_calibration_overlay_created(ui_router_view_t *view)
+{
+    if (view == NULL || view->touch_calibration_overlay != NULL) {
+        return;
+    }
+
+    log_settings_memory("before touch overlay create");
+
+    view->touch_calibration_overlay = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(view->touch_calibration_overlay, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_bg_color(view->touch_calibration_overlay, lv_color_hex(0x111827), 0);
+    lv_obj_set_style_bg_opa(view->touch_calibration_overlay, LV_OPA_80, 0);
+    lv_obj_set_style_border_width(view->touch_calibration_overlay, 0, 0);
+    lv_obj_set_style_pad_all(view->touch_calibration_overlay, 0, 0);
+    lv_obj_add_event_cb(view->touch_calibration_overlay, touch_calibration_overlay_event_cb, LV_EVENT_PRESSED, view);
+    lv_obj_add_event_cb(view->touch_calibration_overlay, touch_calibration_overlay_event_cb, LV_EVENT_PRESSING, view);
+    lv_obj_add_event_cb(view->touch_calibration_overlay, touch_calibration_overlay_event_cb, LV_EVENT_RELEASED, view);
+    lv_obj_add_flag(view->touch_calibration_overlay, LV_OBJ_FLAG_HIDDEN);
+
+    view->touch_calibration_prompt = lv_label_create(view->touch_calibration_overlay);
+    lv_obj_set_width(view->touch_calibration_prompt, lv_pct(100));
+    lv_obj_set_style_text_align(view->touch_calibration_prompt, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(view->touch_calibration_prompt, lv_color_white(), 0);
+    lv_obj_align(view->touch_calibration_prompt, LV_ALIGN_TOP_MID, 0, 12);
+
+    view->touch_calibration_target = lv_obj_create(view->touch_calibration_overlay);
+    lv_obj_set_size(view->touch_calibration_target, TOUCH_CALIBRATION_TARGET_SIZE, TOUCH_CALIBRATION_TARGET_SIZE);
+    lv_obj_set_style_radius(view->touch_calibration_target, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(view->touch_calibration_target, lv_color_hex(TOUCH_CALIBRATION_TARGET_IDLE_COLOR), 0);
+    lv_obj_set_style_bg_opa(view->touch_calibration_target, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(view->touch_calibration_target, 3, 0);
+    lv_obj_set_style_border_color(view->touch_calibration_target, lv_color_white(), 0);
+    lv_obj_remove_flag(view->touch_calibration_target, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+
+    view->touch_calibration_target_crosshair_h = lv_obj_create(view->touch_calibration_target);
+    lv_obj_set_size(
+        view->touch_calibration_target_crosshair_h,
+        TOUCH_CALIBRATION_CROSSHAIR_LENGTH,
+        TOUCH_CALIBRATION_CROSSHAIR_THICKNESS
+    );
+    lv_obj_set_style_radius(view->touch_calibration_target_crosshair_h, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(view->touch_calibration_target_crosshair_h, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(view->touch_calibration_target_crosshair_h, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(view->touch_calibration_target_crosshair_h, 0, 0);
+    lv_obj_remove_flag(view->touch_calibration_target_crosshair_h, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(view->touch_calibration_target_crosshair_h);
+
+    view->touch_calibration_target_crosshair_v = lv_obj_create(view->touch_calibration_target);
+    lv_obj_set_size(
+        view->touch_calibration_target_crosshair_v,
+        TOUCH_CALIBRATION_CROSSHAIR_THICKNESS,
+        TOUCH_CALIBRATION_CROSSHAIR_LENGTH
+    );
+    lv_obj_set_style_radius(view->touch_calibration_target_crosshair_v, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(view->touch_calibration_target_crosshair_v, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(view->touch_calibration_target_crosshair_v, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(view->touch_calibration_target_crosshair_v, 0, 0);
+    lv_obj_remove_flag(view->touch_calibration_target_crosshair_v, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(view->touch_calibration_target_crosshair_v);
+
+    view->touch_calibration_target_center_dot = lv_obj_create(view->touch_calibration_target);
+    lv_obj_set_size(
+        view->touch_calibration_target_center_dot,
+        TOUCH_CALIBRATION_CENTER_DOT_SIZE,
+        TOUCH_CALIBRATION_CENTER_DOT_SIZE
+    );
+    lv_obj_set_style_radius(view->touch_calibration_target_center_dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(view->touch_calibration_target_center_dot, lv_color_hex(0x111827), 0);
+    lv_obj_set_style_bg_opa(view->touch_calibration_target_center_dot, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(view->touch_calibration_target_center_dot, 1, 0);
+    lv_obj_set_style_border_color(view->touch_calibration_target_center_dot, lv_color_white(), 0);
+    lv_obj_remove_flag(view->touch_calibration_target_center_dot, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_center(view->touch_calibration_target_center_dot);
+
+    log_settings_memory("after touch overlay create");
+}
 
 static size_t get_region_option_index(const char *region_code)
 {
@@ -768,6 +963,7 @@ static void wifi_textarea_event_cb(lv_event_t *event)
     }
 
     if (code == LV_EVENT_FOCUSED || code == LV_EVENT_CLICKED) {
+        ensure_wifi_keyboard_created(view);
         ui_router_set_keyboard_target(view, textarea);
     }
 }
@@ -825,7 +1021,13 @@ static void touch_calibration_start_event_cb(lv_event_t *event)
     app_settings_t settings = {0};
     ui_router_view_t *view = (ui_router_view_t *)lv_event_get_user_data(event);
 
-    if (lv_event_get_code(event) != LV_EVENT_CLICKED || view == NULL || view->touch_calibration_overlay == NULL) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || view == NULL) {
+        return;
+    }
+
+    ensure_touch_calibration_overlay_created(view);
+
+    if (view->touch_calibration_overlay == NULL) {
         return;
     }
 
@@ -1149,6 +1351,22 @@ void ui_settings_update(const app_state_t *state, ui_router_view_t *view)
     }
 }
 
+void ui_settings_destroy(lv_obj_t *tile, ui_router_view_t *view)
+{
+    if (tile == NULL || view == NULL || view->settings_top_bar == NULL) {
+        return;
+    }
+
+    ui_router_hide_keyboard(view);
+
+    if (view->touch_calibration_overlay != NULL) {
+        lv_obj_del(view->touch_calibration_overlay);
+    }
+
+    lv_obj_clean(tile);
+    reset_settings_view(view);
+}
+
 void ui_settings_create(lv_obj_t *screen, lv_obj_t *tile, ui_router_view_t *view)
 {
     lv_obj_set_style_bg_color(tile, lv_color_hex(0x050816), 0);
@@ -1448,90 +1666,5 @@ void ui_settings_create(lv_obj_t *screen, lv_obj_t *tile, ui_router_view_t *view
     lv_obj_set_style_radius(view->firmware_update_progress_bar, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
     lv_obj_add_flag(view->firmware_update_progress_bar, LV_OBJ_FLAG_HIDDEN);
 
-    view->wifi_keyboard = lv_keyboard_create(tile);
-    lv_obj_set_width(view->wifi_keyboard, lv_pct(100));
-    lv_obj_set_height(view->wifi_keyboard, 150);
-    lv_obj_set_style_radius(view->wifi_keyboard, 16, LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(view->wifi_keyboard, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(view->wifi_keyboard, lv_color_hex(0x020617), LV_PART_MAIN);
-    lv_obj_set_style_border_width(view->wifi_keyboard, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(view->wifi_keyboard, lv_color_hex(0x334155), LV_PART_MAIN);
-    lv_obj_set_style_pad_all(view->wifi_keyboard, 8, LV_PART_MAIN);
-    lv_obj_set_style_pad_gap(view->wifi_keyboard, 6, LV_PART_MAIN);
-    lv_obj_set_style_radius(view->wifi_keyboard, 10, LV_PART_ITEMS);
-    lv_obj_set_style_bg_opa(view->wifi_keyboard, LV_OPA_COVER, LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(view->wifi_keyboard, lv_color_hex(0x1e293b), LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(view->wifi_keyboard, lv_color_hex(0x334155), LV_PART_ITEMS | LV_STATE_PRESSED);
-    lv_obj_set_style_bg_color(view->wifi_keyboard, lv_color_hex(0x2563eb), LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_text_color(view->wifi_keyboard, lv_color_white(), LV_PART_ITEMS);
-    lv_obj_set_style_border_width(view->wifi_keyboard, 0, LV_PART_ITEMS);
-    lv_obj_set_style_shadow_width(view->wifi_keyboard, 0, LV_PART_ITEMS);
-    lv_obj_add_event_cb(view->wifi_keyboard, wifi_keyboard_event_cb, LV_EVENT_ALL, view);
-    lv_obj_add_flag(view->wifi_keyboard, LV_OBJ_FLAG_HIDDEN);
-
-    view->touch_calibration_overlay = lv_obj_create(screen);
-    lv_obj_set_size(view->touch_calibration_overlay, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_color(view->touch_calibration_overlay, lv_color_hex(0x111827), 0);
-    lv_obj_set_style_bg_opa(view->touch_calibration_overlay, LV_OPA_80, 0);
-    lv_obj_set_style_border_width(view->touch_calibration_overlay, 0, 0);
-    lv_obj_set_style_pad_all(view->touch_calibration_overlay, 0, 0);
-    lv_obj_add_event_cb(view->touch_calibration_overlay, touch_calibration_overlay_event_cb, LV_EVENT_PRESSED, view);
-    lv_obj_add_event_cb(view->touch_calibration_overlay, touch_calibration_overlay_event_cb, LV_EVENT_PRESSING, view);
-    lv_obj_add_event_cb(view->touch_calibration_overlay, touch_calibration_overlay_event_cb, LV_EVENT_RELEASED, view);
-    lv_obj_add_flag(view->touch_calibration_overlay, LV_OBJ_FLAG_HIDDEN);
-
-    view->touch_calibration_prompt = lv_label_create(view->touch_calibration_overlay);
-    lv_obj_set_width(view->touch_calibration_prompt, lv_pct(100));
-    lv_obj_set_style_text_align(view->touch_calibration_prompt, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(view->touch_calibration_prompt, lv_color_white(), 0);
-    lv_obj_align(view->touch_calibration_prompt, LV_ALIGN_TOP_MID, 0, 12);
-
-    view->touch_calibration_target = lv_obj_create(view->touch_calibration_overlay);
-    lv_obj_set_size(view->touch_calibration_target, TOUCH_CALIBRATION_TARGET_SIZE, TOUCH_CALIBRATION_TARGET_SIZE);
-    lv_obj_set_style_radius(view->touch_calibration_target, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(view->touch_calibration_target, lv_color_hex(TOUCH_CALIBRATION_TARGET_IDLE_COLOR), 0);
-    lv_obj_set_style_bg_opa(view->touch_calibration_target, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(view->touch_calibration_target, 3, 0);
-    lv_obj_set_style_border_color(view->touch_calibration_target, lv_color_white(), 0);
-    lv_obj_remove_flag(view->touch_calibration_target, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-
-    view->touch_calibration_target_crosshair_h = lv_obj_create(view->touch_calibration_target);
-    lv_obj_set_size(
-        view->touch_calibration_target_crosshair_h,
-        TOUCH_CALIBRATION_CROSSHAIR_LENGTH,
-        TOUCH_CALIBRATION_CROSSHAIR_THICKNESS
-    );
-    lv_obj_set_style_radius(view->touch_calibration_target_crosshair_h, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(view->touch_calibration_target_crosshair_h, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(view->touch_calibration_target_crosshair_h, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(view->touch_calibration_target_crosshair_h, 0, 0);
-    lv_obj_remove_flag(view->touch_calibration_target_crosshair_h, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_center(view->touch_calibration_target_crosshair_h);
-
-    view->touch_calibration_target_crosshair_v = lv_obj_create(view->touch_calibration_target);
-    lv_obj_set_size(
-        view->touch_calibration_target_crosshair_v,
-        TOUCH_CALIBRATION_CROSSHAIR_THICKNESS,
-        TOUCH_CALIBRATION_CROSSHAIR_LENGTH
-    );
-    lv_obj_set_style_radius(view->touch_calibration_target_crosshair_v, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(view->touch_calibration_target_crosshair_v, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(view->touch_calibration_target_crosshair_v, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(view->touch_calibration_target_crosshair_v, 0, 0);
-    lv_obj_remove_flag(view->touch_calibration_target_crosshair_v, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_center(view->touch_calibration_target_crosshair_v);
-
-    view->touch_calibration_target_center_dot = lv_obj_create(view->touch_calibration_target);
-    lv_obj_set_size(
-        view->touch_calibration_target_center_dot,
-        TOUCH_CALIBRATION_CENTER_DOT_SIZE,
-        TOUCH_CALIBRATION_CENTER_DOT_SIZE
-    );
-    lv_obj_set_style_radius(view->touch_calibration_target_center_dot, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(view->touch_calibration_target_center_dot, lv_color_hex(0x111827), 0);
-    lv_obj_set_style_bg_opa(view->touch_calibration_target_center_dot, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(view->touch_calibration_target_center_dot, 1, 0);
-    lv_obj_set_style_border_color(view->touch_calibration_target_center_dot, lv_color_white(), 0);
-    lv_obj_remove_flag(view->touch_calibration_target_center_dot, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_center(view->touch_calibration_target_center_dot);
+    LV_UNUSED(screen);
 }

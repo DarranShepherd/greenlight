@@ -256,7 +256,6 @@ static esp_err_t execute_scan(void)
     };
     uint16_t ap_count = APP_WIFI_SCAN_MAX_RESULTS;
 
-    app_state_set_active_screen(s_state, APP_SCREEN_SETTINGS);
     app_state_set_wifi_status(s_state, APP_WIFI_STATUS_SCANNING, "Scanning nearby Wi-Fi networks");
 
     ESP_RETURN_ON_ERROR(esp_wifi_scan_start(&scan_config, true), TAG, "start Wi-Fi scan");
@@ -294,7 +293,6 @@ static esp_err_t execute_connect(const char *ssid, const char *psk)
     clear_background_reconnect();
     xEventGroupClearBits(s_event_group, WIFI_MANAGER_CONNECTED_BIT | WIFI_MANAGER_FAILED_BIT);
 
-    app_state_set_active_screen(s_state, APP_SCREEN_SETTINGS);
     app_state_set_wifi_connection(s_state, ssid, "");
     set_status_with_ssid(APP_WIFI_STATUS_CONNECTING, "Connecting to", ssid);
     app_state_set_time_status(s_state, APP_TIME_STATUS_IDLE, false, "Waiting for Wi-Fi before time sync");

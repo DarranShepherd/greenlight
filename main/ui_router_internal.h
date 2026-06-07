@@ -144,7 +144,9 @@ void ui_primary_create(lv_obj_t *tile, ui_router_view_t *view);
 void ui_primary_update(const app_state_t *state, ui_router_view_t *view);
 
 void ui_detail_create(lv_obj_t *tile, ui_router_view_t *view);
+void ui_detail_destroy(lv_obj_t *tile, ui_router_view_t *view);
 void ui_detail_update(const app_state_t *state, ui_router_view_t *view);
 
 void ui_settings_create(lv_obj_t *screen, lv_obj_t *tile, ui_router_view_t *view);
+void ui_settings_destroy(lv_obj_t *tile, ui_router_view_t *view);
 void ui_settings_update(const app_state_t *state, ui_router_view_t *view);
